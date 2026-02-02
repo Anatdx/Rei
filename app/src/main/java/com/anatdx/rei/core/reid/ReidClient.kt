@@ -60,7 +60,7 @@ object ReidClient {
                 append("elif [ -x /data/adb/reid ]; then /data/adb/reid ")
                 append(escapedArgs)
                 append("; ")
-                append("else echo no_installed_reid; exit 127; fi")
+                append("else echo no_installed_backend; exit 127; fi")
                 append("'")
             }
 

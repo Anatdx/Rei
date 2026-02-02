@@ -50,7 +50,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.anatdx.rei.R
 import com.anatdx.rei.core.root.RootAccessState
-import com.anatdx.rei.core.root.RootShell
+import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.ui.modules.ModulesScreen
 import com.anatdx.rei.ui.home.HomeScreen
 import com.anatdx.rei.ui.logs.LogsScreen
@@ -253,7 +253,6 @@ fun ReiApp(
                             onDynamicColorChange = onDynamicColorChange,
                             onThemePresetChange = onThemePresetChange,
                             onOpenLogs = { navController.navigate("settings/logs") },
-                            onOpenAppAccess = { navController.navigate(ReiDest.AppAccess.route) },
                             onOpenBootTools = { navController.navigate("settings/boot_tools") },
                         )
                     }
@@ -282,7 +281,18 @@ fun ReiApp(
                                     snackbarHostState.showSnackbar("未知操作：$action")
                                     return@launch
                                 }
-                                val r = RootShell.exec(cmd, timeoutMs = 8_000L)
+                                val args = when (cmd) {
+                                    "reboot" -> listOf("kernel", "reboot")
+                                    "reboot recovery" -> listOf("kernel", "reboot", "recovery")
+                                    "reboot bootloader" -> listOf("kernel", "reboot", "bootloader")
+                                    "reboot -p" -> listOf("kernel", "reboot", "poweroff")
+                                    else -> emptyList()
+                                }
+                                if (args.isEmpty()) {
+                                    snackbarHostState.showSnackbar("未知操作：$action")
+                                    return@launch
+                                }
+                                val r = ReidClient.exec(ctx, args, timeoutMs = 10_000L)
                                 snackbarHostState.showSnackbar("执行：$action（exit=${r.exitCode}）")
                             }
                         },

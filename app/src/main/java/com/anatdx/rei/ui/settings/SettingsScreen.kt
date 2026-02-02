@@ -75,7 +75,6 @@ fun SettingsScreen(
     onDynamicColorChange: (Boolean) -> Unit,
     onThemePresetChange: (ThemePreset) -> Unit,
     onOpenLogs: () -> Unit,
-    onOpenAppAccess: () -> Unit,
     onOpenBootTools: () -> Unit,
 ) {
     LazyColumn(
@@ -86,7 +85,6 @@ fun SettingsScreen(
 
         item {
             ManageCard(
-                onOpenAppAccess = onOpenAppAccess,
                 onOpenLogs = onOpenLogs,
                 onOpenBootTools = onOpenBootTools,
             )
@@ -306,7 +304,6 @@ private fun AppearanceCard(
 
 @Composable
 private fun ManageCard(
-    onOpenAppAccess: () -> Unit,
     onOpenLogs: () -> Unit,
     onOpenBootTools: () -> Unit,
 ) {
@@ -314,15 +311,8 @@ private fun ManageCard(
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
                 headlineContent = { Text("管理") },
-                supportingContent = { Text("授权列表 / 日志 / Boot 工具") },
+                supportingContent = { Text("日志 / Boot 工具") },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            ListItem(
-                headlineContent = { Text("应用授权") },
-                supportingContent = { Text("查看/修改应用的授权等级") },
-                trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
-                modifier = Modifier.clickable(onClick = onOpenAppAccess),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(

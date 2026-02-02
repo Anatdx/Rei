@@ -17,15 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,15 +61,16 @@ fun AppAccessListScreen() {
     val scope = rememberCoroutineScope()
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var editing by remember { mutableStateOf<AppEntry?>(null) }
     var stats by remember { mutableStateOf(AuthStats()) }
     var search by remember { mutableStateOf("") }
+    var lastError by remember { mutableStateOf<String?>(null) }
 
     suspend fun refresh() {
         loading = true
-        val (entries, s) = withContext(Dispatchers.IO) { queryManagerView(ctx) }
-        apps = entries
-        stats = s
+        val r = withContext(Dispatchers.IO) { queryManagerView(ctx) }
+        apps = r.entries
+        stats = r.stats
+        lastError = r.error
         loading = false
     }
 
@@ -108,6 +108,14 @@ fun AppAccessListScreen() {
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
+                if (!lastError.isNullOrBlank()) {
+                    Text(
+                        text = lastError.orEmpty().take(200),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     OutlinedTextField(
                         value = search,
@@ -128,10 +136,55 @@ fun AppAccessListScreen() {
                     supportingContent = { Text(app.packageName) },
                     leadingContent = { AppIcon(pkg = app.packageName) },
                     trailingContent = {
-                        AssistChip(
-                            onClick = { editing = app },
-                            label = { Text(if (app.granted) "已授权" else "未授权") },
-                        )
+                        IconButton(
+                            onClick = {
+                                val uid = app.uid.toString()
+                                val pkg = app.packageName
+                                val to = if (app.granted) "0" else "1"
+                                // Optimistic UI update; silent execution.
+                                apps = apps.map {
+                                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
+                                }
+                                scope.launch {
+                                    val r = ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, to), timeoutMs = 8_000L)
+                                    if (r.exitCode != 0) {
+                                        // Revert on failure (still silent).
+                                        apps = apps.map {
+                                            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
+                                        }
+                                        lastError = "set-allow failed: exit=${r.exitCode}"
+                                    } else {
+                                        lastError = null
+                                    }
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (app.granted) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                                contentDescription = null,
+                                tint = if (app.granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    modifier = Modifier.clickable {
+                        // Same as clicking the icon (keep behavior consistent).
+                        val uid = app.uid.toString()
+                        val pkg = app.packageName
+                        val to = if (app.granted) "0" else "1"
+                        apps = apps.map {
+                            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
+                        }
+                        scope.launch {
+                            val r = ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, to), timeoutMs = 8_000L)
+                            if (r.exitCode != 0) {
+                                apps = apps.map {
+                                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
+                                }
+                                lastError = "set-allow failed: exit=${r.exitCode}"
+                            } else {
+                                lastError = null
+                            }
+                        }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
@@ -141,37 +194,6 @@ fun AppAccessListScreen() {
         item { Spacer(Modifier.height(16.dp)) }
     }
 
-    if (editing != null) {
-        val app = editing!!
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            title = { Text("管理授权") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(app.packageName, style = MaterialTheme.typography.titleSmall)
-                    Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("UID: ${app.uid}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(6.dp))
-                    Text("当前：${if (app.granted) "允许 Root（allow_su=true）" else "拒绝 Root（allow_su=false）"}", style = MaterialTheme.typography.bodyMedium)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val uid = app.uid.toString()
-                        val pkg = app.packageName
-                        editing = null
-                        scope.launch {
-                            val to = if (app.granted) "0" else "1"
-                            ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, to), timeoutMs = 8_000L)
-                            refresh()
-                        }
-                    },
-                ) { Text(if (app.granted) "撤销授权" else "授予授权") }
-            },
-            dismissButton = { OutlinedButton(onClick = { editing = null }) { Text("取消") } },
-        )
-    }
 }
 
 private data class AuthStats(
@@ -179,17 +201,19 @@ private data class AuthStats(
     val grantedCount: Int = 0,
 )
 
-private suspend fun queryManagerView(ctx: Context): Pair<List<AppEntry>, AuthStats> {
+private data class ManagerViewResult(
+    val entries: List<AppEntry>,
+    val stats: AuthStats,
+    val error: String? = null,
+)
+
+private suspend fun queryManagerView(ctx: Context): ManagerViewResult {
     val allowUids = queryAllowUids(ctx)
     val pkgs = queryPackagesFromReid(ctx)
-    val entries = pkgs.map { (pkg, uid) ->
-        AppEntry(packageName = pkg, uid = uid, granted = allowUids.contains(uid))
-    }
-    val stats = AuthStats(
-        allowlistCount = allowUids.size,
-        grantedCount = entries.count { it.granted },
-    )
-    return entries to stats
+    val entries = pkgs.map { (pkg, uid) -> AppEntry(packageName = pkg, uid = uid, granted = allowUids.contains(uid)) }
+    val stats = AuthStats(allowlistCount = allowUids.size, grantedCount = entries.count { it.granted })
+    val err = if (pkgs.isEmpty()) "后端未返回包列表（需要 Root/ksud 可用）" else null
+    return ManagerViewResult(entries = entries, stats = stats, error = err)
 }
 
 private suspend fun queryAllowUids(ctx: Context): Set<Int> {

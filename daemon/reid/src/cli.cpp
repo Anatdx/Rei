@@ -343,6 +343,7 @@ static int cmd_kernel(const std::vector<std::string>& args) {
         printf("SUBCOMMANDS:\n");
         printf("  nuke-ext4-sysfs <MNT>  Nuke ext4 sysfs\n");
         printf("  umount <add|del|wipe>  Manage umount list\n");
+        printf("  reboot [recovery|bootloader|poweroff]  Reboot device\n");
         printf("  notify-module-mounted  Notify module mounted\n");
         return 1;
     }
@@ -361,6 +362,28 @@ static int cmd_kernel(const std::vector<std::string>& args) {
         } else if (op == "wipe") {
             return umount_list_wipe();
         }
+    } else if (subcmd == "reboot") {
+        std::vector<std::string> cmd{"/system/bin/reboot"};
+        if (args.size() > 1) {
+            const std::string& mode = args[1];
+            if (mode == "recovery") {
+                cmd.push_back("recovery");
+            } else if (mode == "bootloader") {
+                cmd.push_back("bootloader");
+            } else if (mode == "poweroff") {
+                cmd.push_back("-p");
+            } else {
+                printf("Unknown reboot mode: %s\n", mode.c_str());
+                return 1;
+            }
+        }
+        auto r = exec_command(cmd);
+        if (r.exit_code != 0) {
+            printf("%s", r.stdout_str.c_str());
+            return 1;
+        }
+        printf("OK\n");
+        return 0;
     } else if (subcmd == "notify-module-mounted") {
         report_module_mounted();
         return 0;

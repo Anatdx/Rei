@@ -3,11 +3,14 @@ package com.anatdx.rei.ui.modules
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,7 +30,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -125,149 +127,143 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
         if (canUseRoot()) refresh()
     }
 
-    LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { Spacer(Modifier.height(4.dp)) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 96.dp),
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
-        item {
-            ReiCard {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    ListItem(
-                        headlineContent = { Text("模块") },
-                        supportingContent = {
-                            Text(
-                                if (canUseRoot()) {
-                                    if (loading) "正在读取模块列表…" else "已加载 ${modules.size} 个模块"
-                                } else {
-                                    "未获取 Root（模块管理需要 Root）"
-                                }
-                            )
-                        },
-                        leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
-                        trailingContent = {
-                            IconButton(
-                                enabled = canUseRoot() && !loading,
-                                onClick = { scope.launch { refresh() } },
-                            ) { Icon(Icons.Outlined.Refresh, contentDescription = null) }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                    if (lastError != null) {
+            item {
+                ReiCard {
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         ListItem(
-                            headlineContent = { Text("读取失败") },
-                            supportingContent = { Text(lastError ?: "") },
-                            leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
+                            headlineContent = { Text("模块") },
+                            supportingContent = {
+                                Text(
+                                    if (canUseRoot()) {
+                                        if (loading) "正在读取模块列表…" else "已加载 ${modules.size} 个模块"
+                                    } else {
+                                        "未获取 Root（模块管理需要 Root）"
+                                    }
+                                )
+                            },
+                            leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                            trailingContent = {
+                                IconButton(
+                                    enabled = canUseRoot() && !loading,
+                                    onClick = { scope.launch { refresh() } },
+                                ) { Icon(Icons.Outlined.Refresh, contentDescription = null) }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        )
+                        if (lastError != null) {
+                            ListItem(
+                                headlineContent = { Text("读取失败") },
+                                supportingContent = { Text(lastError ?: "") },
+                                leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (installZip.isNotBlank()) {
+                item {
+                    ReiCard {
+                        ListItem(
+                            headlineContent = { Text("待安装模块") },
+                            supportingContent = { Text(installZipLabel.ifBlank { installZip }) },
+                            leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                            trailingContent = {
+                                IconButton(
+                                    enabled = canUseRoot() && !loading,
+                                    onClick = {
+                                        installZip = ""
+                                        installZipLabel = ""
+                                    },
+                                ) { Icon(Icons.Outlined.Close, contentDescription = null) }
+                            },
+                            modifier = Modifier.clickable(enabled = canUseRoot() && !loading) {
+                                runOp(listOf("module", "install", installZip.trim()))
+                            },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
                     }
                 }
             }
-        }
 
-        item {
-            ReiCard {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        text = "安装模块",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = installZipLabel.ifBlank { "" },
-                            onValueChange = {},
-                            enabled = canUseRoot() && !loading,
-                            label = { Text(if (installZipLabel.isBlank()) "未选择 zip" else "zip") },
+            items(modules.size) { idx ->
+                val m = modules[idx]
+                ReiCard {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        ListItem(
+                            headlineContent = { Text(m.name) },
+                            supportingContent = {
+                                val ver = buildString {
+                                    if (m.version.isNotBlank()) append(m.version) else append("unknown")
+                                    if (m.author.isNotBlank()) append(" · ").append(m.author)
+                                    append("\n").append(m.id)
+                                }
+                                Text(ver)
+                            },
+                            leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                            trailingContent = {
+                                Switch(
+                                    checked = m.enabled,
+                                    enabled = canUseRoot() && !loading,
+                                    onCheckedChange = { on ->
+                                        runOp(listOf("module", if (on) "enable" else "disable", m.id))
+                                    },
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        )
+                        if (m.description.isNotBlank()) {
+                            Text(m.description, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                        }
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(end = 56.dp),
-                            readOnly = true,
-                            singleLine = true,
-                            trailingIcon = {
-                                if (installZip.isNotBlank() && canUseRoot() && !loading) {
-                                    IconButton(
-                                        onClick = {
-                                            installZip = ""
-                                            installZipLabel = ""
-                                        }
-                                    ) { Icon(Icons.Outlined.Close, contentDescription = null) }
-                                }
-                            },
-                        )
-                        FloatingActionButton(
-                            onClick = { pickZip.launch(arrayOf("*/*")) },
-                            modifier = Modifier.align(Alignment.BottomEnd),
-                        ) { Icon(Icons.Outlined.FolderOpen, contentDescription = null) }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Button(
-                        enabled = canUseRoot() && !loading && installZip.isNotBlank(),
-                        onClick = { runOp(listOf("module", "install", installZip.trim())) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("安装") }
-                }
-            }
-        }
-
-        items(modules.size) { idx ->
-            val m = modules[idx]
-            ReiCard {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    ListItem(
-                        headlineContent = { Text(m.name) },
-                        supportingContent = {
-                            val ver = buildString {
-                                if (m.version.isNotBlank()) append(m.version) else append("unknown")
-                                if (m.author.isNotBlank()) append(" · ").append(m.author)
-                                append("\n").append(m.id)
-                            }
-                            Text(ver)
-                        },
-                        leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
-                        trailingContent = {
-                            Switch(
-                                checked = m.enabled,
-                                enabled = canUseRoot() && !loading,
-                                onCheckedChange = { on ->
-                                    runOp(listOf("module", if (on) "enable" else "disable", m.id))
-                                },
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                    if (m.description.isNotBlank()) {
-                        Text(m.description, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedButton(
-                            enabled = canUseRoot() && !loading,
-                            onClick = { runOp(listOf("module", "uninstall", m.id)) },
-                        ) { Text("卸载") }
-                        if (m.action) {
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             OutlinedButton(
                                 enabled = canUseRoot() && !loading,
-                                onClick = { runOp(listOf("module", "action", m.id), timeoutMs = 180_000L, refreshAfter = false) },
-                            ) { Text("Action") }
+                                onClick = { runOp(listOf("module", "uninstall", m.id)) },
+                            ) { Text("卸载") }
+                            if (m.action) {
+                                OutlinedButton(
+                                    enabled = canUseRoot() && !loading,
+                                    onClick = { runOp(listOf("module", "action", m.id), timeoutMs = 180_000L, refreshAfter = false) },
+                                ) { Text("Action") }
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = if (m.update) "有更新" else "",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         }
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = if (m.update) "有更新" else "",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
                     }
                 }
             }
+
+            item { Spacer(Modifier.height(16.dp)) }
         }
 
-        item { Spacer(Modifier.height(16.dp)) }
+        FloatingActionButton(
+            onClick = { pickZip.launch(arrayOf("*/*")) },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        ) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+        }
     }
 
     if (showOutput && lastOutput != null) {

@@ -47,6 +47,8 @@ import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.File
 
 @Composable
 fun HomeScreen(
@@ -96,11 +98,7 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 }.getOrNull().orEmpty()
             }
             val selinux = withContext(Dispatchers.IO) {
-                runCatching {
-                    ProcessBuilder("sh", "-c", "getenforce 2>/dev/null || echo unknown")
-                        .redirectErrorStream(true).start()
-                        .inputStream.bufferedReader().readText().trim()
-                }.getOrNull().orEmpty()
+                querySelinuxMode()
             }
             sys = sys.copy(kernel = kernel, selinux = selinux)
         }
@@ -156,6 +154,29 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
         }
+    }
+}
+
+private fun querySelinuxMode(): String {
+    fun readProc(cmd: List<String>): String? {
+        return runCatching {
+            val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+            p.inputStream.bufferedReader().use(BufferedReader::readText).trim()
+        }.getOrNull()
+    }
+
+    // Prefer absolute path to avoid PATH issues.
+    val ge = readProc(listOf("/system/bin/getenforce"))?.takeIf { it.isNotBlank() }
+        ?: readProc(listOf("sh", "-c", "/system/bin/getenforce 2>/dev/null"))?.takeIf { it.isNotBlank() }
+
+    if (ge != null && !ge.equals("unknown", ignoreCase = true)) return ge
+
+    // Fallback: /sys/fs/selinux/enforce -> 1 Enforcing / 0 Permissive
+    val enforce = runCatching { File("/sys/fs/selinux/enforce").readText().trim() }.getOrNull()
+    return when (enforce) {
+        "1" -> "Enforcing"
+        "0" -> "Permissive"
+        else -> ge ?: "unknown"
     }
 }
 
