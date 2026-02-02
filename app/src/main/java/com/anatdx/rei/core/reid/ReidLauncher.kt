@@ -26,6 +26,8 @@ object ReidLauncher {
 
             val dstReid = "/data/adb/reid"
             val ksud = "/data/adb/ksud"
+            val uid = android.os.Process.myUid()
+            val pkg = context.packageName
 
             val installCmd = buildString {
                 fun esc(s: String) = s.replace("'", "'\\''")
@@ -51,6 +53,10 @@ object ReidLauncher {
                 append("ln -f '").append(dstReid).append("' '").append(ksud).append("'; ")
 
                 append("(restorecon -F '").append(dstReid).append("' '").append(ksud).append("' 2>/dev/null || true); ")
+
+                // Make sure kernel recognizes Rei as manager, and allow this UID.
+                append("('").append(ksud).append("' debug set-manager '").append(esc(pkg)).append("' >/dev/null 2>&1 || true); ")
+                append("('").append(ksud).append("' profile set-allow '").append(uid).append("' '").append(esc(pkg)).append("' 1 >/dev/null 2>&1 || true); ")
 
                 append("echo OK")
             }

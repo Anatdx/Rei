@@ -5,27 +5,29 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cancel
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,20 +41,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.anatdx.rei.core.reid.ReidClient
+import com.anatdx.rei.KsuNatives
 import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
 private data class AppEntry(
     val packageName: String,
     val uid: Int,
     val granted: Boolean,
+    val isSystem: Boolean,
 )
 
 @Composable
@@ -63,11 +65,13 @@ fun AppAccessListScreen() {
     var loading by remember { mutableStateOf(true) }
     var stats by remember { mutableStateOf(AuthStats()) }
     var search by remember { mutableStateOf("") }
+    var showSystemApps by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
+    var pending by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     suspend fun refresh() {
         loading = true
-        val r = withContext(Dispatchers.IO) { queryManagerView(ctx) }
+        val r = withContext(Dispatchers.IO) { queryManagerViewDirect(ctx) }
         apps = r.entries
         stats = r.stats
         lastError = r.error
@@ -78,15 +82,73 @@ fun AppAccessListScreen() {
         refresh()
     }
 
-    val filtered = remember(apps, search) {
+    val filtered = remember(apps, search, showSystemApps) {
         val q = search.trim()
         apps.asSequence()
             .filter { a ->
                 if (q.isBlank()) true
                 else a.packageName.contains(q, ignoreCase = true)
             }
+            .filter { a -> showSystemApps || !a.isSystem }
             .sortedBy { it.packageName.lowercase() }
             .toList()
+    }
+
+    val visibleGranted = remember(filtered) { filtered.count { it.granted } }
+
+    fun keyOf(a: AppEntry): String = "${a.uid}:${a.packageName}"
+
+    fun updateStatsFrom(list: List<AppEntry>) {
+        val granted = list.count { it.granted }
+        stats = stats.copy(allowlistCount = granted, grantedCount = granted)
+    }
+
+    fun requestToggle(app: AppEntry) {
+        val key = keyOf(app)
+        if (pending.contains(key)) return
+        val uid = app.uid.toString()
+        val pkg = app.packageName
+        val to = !app.granted
+
+        // Optimistic UI update; silent execution.
+        val newApps = apps.map {
+            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
+        }
+        apps = newApps
+        updateStatsFrom(newApps)
+        pending = pending + key
+
+        scope.launch {
+            pending = pending - key
+            val ok = runCatching {
+                KsuNatives.setAppProfile(
+                    KsuNatives.Profile(
+                        name = pkg,
+                        currentUid = app.uid,
+                        allowSu = to,
+                    )
+                )
+            }.getOrDefault(false)
+
+            if (!ok) {
+                // Revert on failure (still silent, but show reason in header).
+                val reverted = apps.map {
+                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
+                }
+                apps = reverted
+                updateStatsFrom(reverted)
+                val isManager = runCatching { KsuNatives.isManager }.getOrDefault(false)
+                val ver = runCatching { KsuNatives.version }.getOrDefault(-1)
+                val driver = runCatching { KsuNatives.isKsuDriverPresent }.getOrDefault(false)
+                val errno = runCatching { KsuNatives.lastErrno }.getOrDefault(-1)
+                lastError = "setAppProfile failed (isManager=$isManager, driver=$driver, version=$ver, errno=$errno)"
+            } else {
+                lastError = null
+                // Refresh allowlist/stat counters after successful change.
+                val allow = runCatching { KsuNatives.allowList.toHashSet() }.getOrDefault(hashSetOf())
+                updateStatsFrom(apps.map { it.copy(granted = allow.contains(it.uid)) })
+            }
+        }
     }
 
     LazyColumn(
@@ -102,7 +164,7 @@ fun AppAccessListScreen() {
                     supportingContent = {
                         Text(
                             if (loading) "正在读取应用列表…"
-                            else "已加载 ${filtered.size}/${apps.size}（已授权 ${stats.grantedCount} / allowlist=${stats.allowlistCount}）"
+                            else "可见 ${filtered.size}/${apps.size}（可见已授权 $visibleGranted；allowlist=${stats.allowlistCount}）"
                         )
                     },
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
@@ -124,67 +186,50 @@ fun AppAccessListScreen() {
                         label = { Text("搜索（名称 / 包名）") },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "显示系统应用",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = showSystemApps,
+                            onCheckedChange = { showSystemApps = it },
+                        )
+                    }
                 }
             }
         }
 
         items(filtered.size) { idx ->
             val app = filtered[idx]
+            val key = keyOf(app)
             ReiCard {
                 ListItem(
                     headlineContent = { Text(app.packageName) },
-                    supportingContent = { Text(app.packageName) },
+                    supportingContent = {
+                        Text(
+                            if (app.isSystem) "系统应用 · uid=${app.uid}" else "用户应用 · uid=${app.uid}"
+                        )
+                    },
                     leadingContent = { AppIcon(pkg = app.packageName) },
                     trailingContent = {
-                        IconButton(
-                            onClick = {
-                                val uid = app.uid.toString()
-                                val pkg = app.packageName
-                                val to = if (app.granted) "0" else "1"
-                                // Optimistic UI update; silent execution.
-                                apps = apps.map {
-                                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
-                                }
-                                scope.launch {
-                                    val r = ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, to), timeoutMs = 8_000L)
-                                    if (r.exitCode != 0) {
-                                        // Revert on failure (still silent).
-                                        apps = apps.map {
-                                            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
-                                        }
-                                        lastError = "set-allow failed: exit=${r.exitCode}"
-                                    } else {
-                                        lastError = null
-                                    }
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = if (app.granted) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
-                                contentDescription = null,
-                                tint = if (app.granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Switch(
+                            checked = app.granted,
+                            enabled = !pending.contains(key),
+                            onCheckedChange = { requestToggle(app) },
+                        )
                     },
                     modifier = Modifier.clickable {
-                        // Same as clicking the icon (keep behavior consistent).
-                        val uid = app.uid.toString()
-                        val pkg = app.packageName
-                        val to = if (app.granted) "0" else "1"
-                        apps = apps.map {
-                            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
-                        }
-                        scope.launch {
-                            val r = ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, to), timeoutMs = 8_000L)
-                            if (r.exitCode != 0) {
-                                apps = apps.map {
-                                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
-                                }
-                                lastError = "set-allow failed: exit=${r.exitCode}"
-                            } else {
-                                lastError = null
-                            }
-                        }
+                        requestToggle(app)
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
@@ -207,38 +252,63 @@ private data class ManagerViewResult(
     val error: String? = null,
 )
 
-private suspend fun queryManagerView(ctx: Context): ManagerViewResult {
-    val allowUids = queryAllowUids(ctx)
-    val pkgs = queryPackagesFromReid(ctx)
-    val entries = pkgs.map { (pkg, uid) -> AppEntry(packageName = pkg, uid = uid, granted = allowUids.contains(uid)) }
-    val stats = AuthStats(allowlistCount = allowUids.size, grantedCount = entries.count { it.granted })
-    val err = if (pkgs.isEmpty()) "后端未返回包列表（需要 Root/ksud 可用）" else null
-    return ManagerViewResult(entries = entries, stats = stats, error = err)
+private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
+    val pkgs = queryInstalledPackages(ctx)
+    if (pkgs.isEmpty()) {
+        return ManagerViewResult(entries = emptyList(), stats = AuthStats(), error = "未能读取本机应用列表")
+    }
+
+    val allow = runCatching { KsuNatives.allowList.toHashSet() }.getOrDefault(hashSetOf())
+    val isManager = runCatching { KsuNatives.isManager }.getOrDefault(false)
+    val ver = runCatching { KsuNatives.version }.getOrDefault(-1)
+
+    val out = pkgs.map { p ->
+        AppEntry(
+            packageName = p.packageName,
+            uid = p.uid,
+            isSystem = p.isSystem,
+            granted = allow.contains(p.uid),
+        )
+    }
+    val granted = out.count { it.granted }
+    val stats = AuthStats(allowlistCount = allow.size, grantedCount = granted)
+
+    val err = when {
+        ver <= 0 -> "KernelSU 驱动不可用（version=$ver）"
+        !isManager -> "当前管理器未被内核识别（isManager=false）"
+        else -> null
+    }
+    return ManagerViewResult(entries = out, stats = stats, error = err)
 }
 
-private suspend fun queryAllowUids(ctx: Context): Set<Int> {
-    val r = ReidClient.exec(ctx, listOf("profile", "allowlist"), timeoutMs = 8_000L)
-    if (r.exitCode != 0) return emptySet()
-    val arr = JSONArray(r.output.trim())
-    val out = HashSet<Int>(arr.length())
-    for (i in 0 until arr.length()) {
-        val uid = arr.optInt(i, -1)
-        if (uid >= 0) out.add(uid)
+private data class InstalledPkg(
+    val packageName: String,
+    val uid: Int,
+    val isSystem: Boolean,
+)
+
+private suspend fun queryInstalledPackages(ctx: Context): List<InstalledPkg> {
+    return withContext(Dispatchers.IO) {
+        runCatching {
+            val pm = ctx.packageManager
+            val out = ArrayList<InstalledPkg>(256)
+            @Suppress("DEPRECATION")
+            val pkgs = pm.getInstalledPackages(0)
+            for (p in pkgs) {
+                val pkg = p.packageName?.trim().orEmpty()
+                val ai = p.applicationInfo
+                val uid = ai?.uid ?: -1
+                val isSystem = ai != null && (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                if (pkg.isNotBlank() && uid >= 0) out += InstalledPkg(packageName = pkg, uid = uid, isSystem = isSystem)
+            }
+            out
+        }.getOrDefault(emptyList())
     }
-    return out
 }
 
-private suspend fun queryPackagesFromReid(ctx: Context): List<Pair<String, Int>> {
-    val r = ReidClient.exec(ctx, listOf("profile", "packages"), timeoutMs = 20_000L)
-    if (r.exitCode != 0) return emptyList()
-    val arr = JSONArray(r.output.trim())
-    val out = ArrayList<Pair<String, Int>>(arr.length())
-    for (i in 0 until arr.length()) {
-        val o: JSONObject = arr.optJSONObject(i) ?: continue
-        val pkg = o.optString("package").trim()
-        val uid = o.optInt("uid", -1)
-        if (pkg.isNotBlank() && uid >= 0) out += (pkg to uid)
-    }
+private fun IntArray.toHashSet(): HashSet<Int> {
+    val out = HashSet<Int>(size)
+    for (v in this) out.add(v)
     return out
 }
 

@@ -17,7 +17,7 @@ import com.anatdx.rei.ui.theme.ThemePreset
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.core.root.RootResult
 import com.anatdx.rei.core.root.RootShell
-import com.anatdx.rei.core.reid.ReidClient
+import com.anatdx.rei.core.reid.ReidLauncher
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,19 +35,16 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(rootNonce) {
                 rootState = RootAccessState.Requesting
-
-                // Step 1: Ask backend (no su) to allow this manager UID.
-                val uid = android.os.Process.myUid()
-                val pkg = this@MainActivity.packageName
-                val check = ReidClient.execDirect(this@MainActivity, listOf("profile", "uid-granted", uid.toString()), timeoutMs = 5_000L)
-                if (check.exitCode != 0) {
-                    ReidClient.execDirect(this@MainActivity, listOf("profile", "set-allow", uid.toString(), pkg, "1"), timeoutMs = 5_000L)
-                }
-
-                // Step 2: Now request su (KernelSU su should consult allowlist).
-                rootState = when (val r = RootShell.request()) {
-                    is RootResult.Granted -> RootAccessState.Granted(r.stdout)
-                    is RootResult.Denied -> RootAccessState.Denied(r.reason)
+                // Request su silently (no UI dialog in-app; provider may still prompt).
+                when (val r = RootShell.request()) {
+                    is RootResult.Granted -> {
+                        // Prepare backend first, then expose "Granted" to UI (so Home refresh sees it ready).
+                        ReidLauncher.start(this@MainActivity)
+                        rootState = RootAccessState.Granted(r.stdout)
+                    }
+                    is RootResult.Denied -> {
+                        rootState = RootAccessState.Denied(r.reason)
+                    }
                 }
             }
 

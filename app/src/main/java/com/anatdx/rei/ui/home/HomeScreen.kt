@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material3.AssistChip
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.anatdx.rei.core.log.ReiLog
+import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.ui.auth.AuthLevel
 import com.anatdx.rei.ui.auth.AuthRequest
@@ -82,10 +84,12 @@ private data class SystemStatus(
     val kernel: String = "",
     val selinux: String = "",
     val device: String = "",
+    val ksu: String = "",
 )
 
 @Composable
 private fun SystemStatusCard(rootAccessState: RootAccessState) {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var sys by remember { mutableStateOf(SystemStatus(device = "${Build.MANUFACTURER} ${Build.MODEL}".trim())) }
 
@@ -98,9 +102,38 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 }.getOrNull().orEmpty()
             }
             val selinux = withContext(Dispatchers.IO) {
-                querySelinuxMode()
+                // Prefer backend+root (ksud/reid under su) to avoid permission denied on some ROMs.
+                if (rootAccessState is RootAccessState.Granted) {
+                    val r = ReidClient.exec(ctx, listOf("debug", "getenforce"), timeoutMs = 3_000L)
+                    val out = r.output.trim()
+                    if (out.isNotBlank()) out else querySelinuxMode()
+                } else {
+                    querySelinuxMode()
+                }
             }
-            sys = sys.copy(kernel = kernel, selinux = selinux)
+            val ksu = withContext(Dispatchers.IO) {
+                if (rootAccessState is RootAccessState.Granted) {
+                    val r = ReidClient.exec(ctx, listOf("debug", "ksu-info"), timeoutMs = 3_000L)
+                    if (r.exitCode == 0 && r.output.isNotBlank()) {
+                        runCatching {
+                            val o = org.json.JSONObject(r.output.trim())
+                            val ver = o.optInt("version", -1)
+                            val mode = o.optString("mode").ifBlank { "unknown" }
+                            val flagsHex = o.optString("flagsHex")
+                            buildString {
+                                if (ver >= 0) append(ver) else append("unknown")
+                                append(" · ").append(mode)
+                                if (flagsHex.isNotBlank()) append(" · ").append(flagsHex)
+                            }
+                        }.getOrElse { r.output.trim().take(80) }
+                    } else {
+                        ""
+                    }
+                } else {
+                    ""
+                }
+            }
+            sys = sys.copy(kernel = kernel, selinux = selinux, ksu = ksu)
         }
     }
 
@@ -147,6 +180,14 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 leadingContent = { Icon(Icons.Outlined.Security, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
+            if (sys.ksu.isNotBlank()) {
+                ListItem(
+                    headlineContent = { Text("KernelSU") },
+                    supportingContent = { Text(sys.ksu) },
+                    leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
             ListItem(
                 headlineContent = { Text("Kernel") },
                 supportingContent = { Text(sys.kernel.ifBlank { "unknown" }) },

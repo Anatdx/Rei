@@ -269,6 +269,8 @@ static int cmd_debug(const std::vector<std::string>& args) {
         printf("  get-sign <APK>     Get APK signature\n");
         printf("  su [-g]            Root shell\n");
         printf("  version            Get kernel version\n");
+        printf("  getenforce         Get SELinux mode\n");
+        printf("  ksu-info           Get KernelSU info (JSON)\n");
         printf("  mark <get|mark|unmark|refresh> [PID]\n");
         return 1;
     }
@@ -282,6 +284,32 @@ static int cmd_debug(const std::vector<std::string>& args) {
         return debug_get_sign(args[1]);
     } else if (subcmd == "version") {
         printf("Kernel Version: %d\n", get_version());
+        return 0;
+    } else if (subcmd == "getenforce") {
+        auto r = exec_command({"/system/bin/getenforce"});
+        if (r.exit_code != 0) {
+            // Fallback: read sysfs when getenforce isn't available/allowed
+            auto enforce = read_file("/sys/fs/selinux/enforce");
+            if (enforce) {
+                auto v = trim(*enforce);
+                printf("%s\n", v == "1" ? "Enforcing" : (v == "0" ? "Permissive" : v.c_str()));
+                return 0;
+            }
+            printf("%s", r.stdout_str.c_str());
+            return 1;
+        }
+        printf("%s\n", trim(r.stdout_str).c_str());
+        return 0;
+    } else if (subcmd == "ksu-info") {
+        int32_t ver = get_version();
+        uint32_t flags = get_flags();
+
+        // manager/app/src/main/cpp/ksu.c: is_lkm_mode() => (info.flags & 0x1) != 0
+        bool is_lkm = (flags & 0x1u) != 0;
+        const char* mode = is_lkm ? "LKM" : "GKI";
+
+        printf("{\"version\":%d,\"flags\":%u,\"flagsHex\":\"0x%x\",\"mode\":\"%s\"}\n",
+               ver, flags, flags, mode);
         return 0;
     } else if (subcmd == "su") {
         bool global_mnt = args.size() > 1 && args[1] == "-g";
@@ -426,6 +454,7 @@ static int cmd_profile(const std::vector<std::string>& args) {
         printf("  allowlist                 List KernelSU allowlist (JSON)\n");
         printf("  denylist                  List KernelSU denylist (JSON)\n");
         printf("  packages                  List installed packages (JSON, via cmd package)\n");
+        printf("  packages-granted          List installed packages with allow_su (JSON)\n");
         printf("  uid-granted <UID>         Check if UID is granted root\n");
         printf("  set-allow <UID> <PKG> <0|1>  Set allow_su for UID+PKG\n");
         printf("  get-sepolicy <PKG>       Get SELinux policy\n");
@@ -537,6 +566,96 @@ static int cmd_profile(const std::vector<std::string>& args) {
         }
         printf("]\n");
         return 0;
+    } else if (subcmd == "packages-granted") {
+        // Combines `packages` with `get_app_profile` to expose allow_su per package.
+        // Output: [{"package":"...","uid":12345,"allow":true}, ...]
+        auto esc_json = [](const std::string& s) -> std::string {
+            std::string out;
+            out.reserve(s.size() + 8);
+            for (char c : s) {
+                switch (c) {
+                    case '\\': out += "\\\\"; break;
+                    case '"': out += "\\\""; break;
+                    case '\n': out += "\\n"; break;
+                    case '\r': out += "\\r"; break;
+                    case '\t': out += "\\t"; break;
+                    default: out += c; break;
+                }
+            }
+            return out;
+        };
+
+        auto r = exec_command({"/system/bin/cmd", "package", "list", "packages", "-U"});
+        if (r.exit_code != 0) {
+            printf("[]\n");
+            return 1;
+        }
+
+        struct Item { std::string pkg; uint32_t uid; bool allow; };
+        std::vector<Item> items;
+        items.reserve(256);
+
+        auto lines = split(r.stdout_str, '\n');
+        for (auto& raw : lines) {
+            auto line = trim(raw);
+            if (line.empty())
+                continue;
+            if (!starts_with(line, "package:"))
+                continue;
+
+            // Extract pkg
+            std::string pkg;
+            {
+                std::string rest = line.substr(std::string("package:").size());
+                auto sp = rest.find(' ');
+                pkg = sp == std::string::npos ? rest : rest.substr(0, sp);
+                pkg = trim(pkg);
+            }
+            if (pkg.empty())
+                continue;
+
+            // Extract uid
+            uint32_t uid = 0;
+            bool has_uid = false;
+            {
+                auto pos = line.find(" uid:");
+                if (pos == std::string::npos) pos = line.find("\tuid:");
+                if (pos == std::string::npos) pos = line.find("uid:");
+                if (pos != std::string::npos) {
+                    auto start = line.find(':', pos);
+                    if (start != std::string::npos) {
+                        start += 1;
+                        auto end = line.find_first_of(" \t\r\n", start);
+                        std::string uid_str = (end == std::string::npos) ? line.substr(start) : line.substr(start, end - start);
+                        uid_str = trim(uid_str);
+                        if (!uid_str.empty()) {
+                            uid = static_cast<uint32_t>(std::stoul(uid_str));
+                            has_uid = true;
+                        }
+                    }
+                }
+            }
+            if (!has_uid)
+                continue;
+
+            bool allow = false;
+            if (auto p = get_app_profile(uid, pkg)) {
+                allow = p->allow_su != 0;
+            }
+            items.push_back(Item{pkg, uid, allow});
+        }
+
+        printf("[\n");
+        for (size_t i = 0; i < items.size(); ++i) {
+            const auto& it = items[i];
+            printf("  {\"package\":\"%s\",\"uid\":%u,\"allow\":%s}%s\n",
+                   esc_json(it.pkg).c_str(),
+                   it.uid,
+                   it.allow ? "true" : "false",
+                   (i + 1 < items.size()) ? "," : "");
+        }
+        printf("]\n");
+        return 0;
     } else if (subcmd == "uid-granted" && args.size() > 1) {
         uint32_t uid = static_cast<uint32_t>(std::stoul(args[1]));
         bool granted = uid_granted_root(uid);
@@ -558,7 +677,7 @@ static int cmd_profile(const std::vector<std::string>& args) {
 
         int ret = set_app_profile(p);
         if (ret < 0) {
-            printf("Failed to set app profile\n");
+            printf("Failed to set app profile (errno=%d:%s)\n", errno, strerror(errno));
             return 1;
         }
         printf("OK\n");

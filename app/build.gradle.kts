@@ -97,10 +97,12 @@ abstract class BuildReiNativeArm64Task : DefaultTask() {
 
         val reidSrc = project.rootProject.layout.projectDirectory.dir("daemon/reid").asFile
         val ksuinitSrc = project.rootProject.layout.projectDirectory.dir("daemon/ksuinit").asFile
+        val kernelsuJniSrc = project.rootProject.layout.projectDirectory.dir("daemon/kernelsu_jni").asFile
 
         val outDir = project.layout.buildDirectory.dir("generated/jniLibs/$abi").get().asFile
         val outReid = File(outDir, "libreid.so")
         val outReinit = File(outDir, "libreinit.so")
+        val outKernelsu = File(outDir, "libkernelsu.so")
 
         val skip = System.getenv("REI_SKIP_NATIVE") == "1"
         if (skip) return
@@ -200,6 +202,8 @@ abstract class BuildReiNativeArm64Task : DefaultTask() {
             val built = listOf(
                 File(buildDir, target),
                 File(buildDir, "bin/$target"),
+                File(buildDir, "lib$target.so"),
+                File(buildDir, "lib${target}.so"),
             ).firstOrNull { it.exists() }
                 ?: throw GradleException("Built output not found for $target in ${buildDir.absolutePath}")
 
@@ -218,10 +222,16 @@ abstract class BuildReiNativeArm64Task : DefaultTask() {
             target = "reinit",
             output = outReinit,
         )
+        buildOne(
+            srcDir = kernelsuJniSrc,
+            buildDir = project.layout.buildDirectory.dir("native/kernelsu_jni/$abi").get().asFile,
+            target = "kernelsu",
+            output = outKernelsu,
+        )
 
-        if (outReid.length() <= 0L || outReinit.length() <= 0L) {
+        if (outReid.length() <= 0L || outReinit.length() <= 0L || outKernelsu.length() <= 0L) {
             throw GradleException(
-                "Native binaries are empty after build (libreid.so=${outReid.length()} bytes, libreinit.so=${outReinit.length()} bytes)"
+                "Native binaries are empty after build (libreid.so=${outReid.length()} bytes, libreinit.so=${outReinit.length()} bytes, libkernelsu.so=${outKernelsu.length()} bytes)"
             )
         }
     }
@@ -231,11 +241,14 @@ val buildNativeArm64 = tasks.register<BuildReiNativeArm64Task>("buildReiNativeAr
     val abi = "arm64-v8a"
     val reidSrc = rootProject.layout.projectDirectory.dir("daemon/reid").asFile
     val ksuinitSrc = rootProject.layout.projectDirectory.dir("daemon/ksuinit").asFile
+    val kernelsuJniSrc = rootProject.layout.projectDirectory.dir("daemon/kernelsu_jni").asFile
     val outDir = layout.buildDirectory.dir("generated/jniLibs/$abi").get().asFile
     outputs.file(File(outDir, "libreid.so"))
     outputs.file(File(outDir, "libreinit.so"))
+    outputs.file(File(outDir, "libkernelsu.so"))
     inputs.dir(reidSrc)
     inputs.dir(ksuinitSrc)
+    inputs.dir(kernelsuJniSrc)
 }
 
 tasks.named("preBuild").configure {
@@ -248,6 +261,7 @@ fun verifyApkHasNative(apk: File, abi: String = "arm64-v8a") {
         val want = listOf(
             "lib/$abi/libreid.so",
             "lib/$abi/libreinit.so",
+            "lib/$abi/libkernelsu.so",
         )
         val names = z.entries().asSequence().map { it.name }.toSet()
         val missing = want.filterNot { names.contains(it) }

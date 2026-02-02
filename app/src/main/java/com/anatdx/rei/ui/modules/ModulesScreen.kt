@@ -16,20 +16,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.anatdx.rei.core.io.UriFiles
 import com.anatdx.rei.core.reid.ReidClient
@@ -55,6 +55,7 @@ import org.json.JSONObject
 import androidx.compose.foundation.lazy.LazyColumn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.zip.ZipFile
 
 @Composable
 fun ModulesScreen(rootAccessState: RootAccessState) {
@@ -63,12 +64,12 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
 
     var loading by rememberSaveable { mutableStateOf(false) }
     var modules by remember { mutableStateOf<List<ModuleEntry>>(emptyList()) }
-    var lastError by rememberSaveable { mutableStateOf<String?>(null) }
+    var listError by rememberSaveable { mutableStateOf<String?>(null) }
+    var opError by rememberSaveable { mutableStateOf<String?>(null) }
 
     var installZip by rememberSaveable { mutableStateOf("") } // absolute path in app cache
     var installZipLabel by rememberSaveable { mutableStateOf("") }
-    var showOutput by rememberSaveable { mutableStateOf(false) }
-    var lastOutput by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingInstall by rememberSaveable { mutableStateOf<PendingInstall?>(null) }
 
     fun canUseRoot(): Boolean = rootAccessState is RootAccessState.Granted
 
@@ -81,26 +82,27 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
             if (f != null) {
                 installZip = f.absolutePath
                 installZipLabel = f.name
+                pendingInstall = withContext(Dispatchers.IO) { scanModuleZip(f.absolutePath) }
             }
         }
     }
 
     suspend fun refresh() {
         if (!canUseRoot()) {
-            lastError = "no_root"
+            listError = "no_root"
             return
         }
         loading = true
-        lastError = null
+        listError = null
         val r = ReidClient.exec(ctx, listOf("module", "list"), timeoutMs = 30_000L)
         if (r.exitCode != 0) {
-            lastError = "exit=${r.exitCode}\n${r.output}"
+            listError = "exit=${r.exitCode}\n${r.output}"
             modules = emptyList()
         } else {
             runCatching {
                 modules = parseModuleListJson(r.output)
             }.onFailure { t ->
-                lastError = t.javaClass.simpleName
+                listError = t.javaClass.simpleName
                 modules = emptyList()
             }
         }
@@ -110,14 +112,12 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
     fun runOp(args: List<String>, timeoutMs: Long = 120_000L, refreshAfter: Boolean = true) {
         scope.launch {
             if (!canUseRoot()) {
-                lastOutput = "no_root"
-                showOutput = true
+                opError = "no_root"
                 return@launch
             }
             loading = true
             val r = ReidClient.exec(ctx, args, timeoutMs = timeoutMs)
-            lastOutput = "reid ${args.joinToString(" ")}\nexit=${r.exitCode}\n${r.output}"
-            showOutput = true
+            opError = if (r.exitCode == 0) null else "exit=${r.exitCode}"
             loading = false
             if (refreshAfter) refresh()
         }
@@ -160,10 +160,18 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                             },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
-                        if (lastError != null) {
+                        if (listError != null) {
                             ListItem(
                                 headlineContent = { Text("读取失败") },
-                                supportingContent = { Text(lastError ?: "") },
+                                supportingContent = { Text(listError ?: "") },
+                                leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            )
+                        }
+                        if (opError != null) {
+                            ListItem(
+                                headlineContent = { Text("操作失败") },
+                                supportingContent = { Text(opError ?: "") },
                                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             )
@@ -177,7 +185,16 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                     ReiCard {
                         ListItem(
                             headlineContent = { Text("待安装模块") },
-                            supportingContent = { Text(installZipLabel.ifBlank { installZip }) },
+                            supportingContent = {
+                                val p = pendingInstall
+                                val line1 = p?.name?.takeIf { it.isNotBlank() } ?: installZipLabel.ifBlank { installZip }
+                                val line2 = buildString {
+                                    if (p?.id?.isNotBlank() == true) append(p.id)
+                                    if (p?.version?.isNotBlank() == true) append(" · ").append(p.version)
+                                    if (p?.author?.isNotBlank() == true) append(" · ").append(p.author)
+                                }.ifBlank { installZipLabel.ifBlank { installZip } }
+                                Text("$line1\n$line2")
+                            },
                             leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
                             trailingContent = {
                                 IconButton(
@@ -185,11 +202,25 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                     onClick = {
                                         installZip = ""
                                         installZipLabel = ""
+                                        pendingInstall = null
                                     },
                                 ) { Icon(Icons.Outlined.Close, contentDescription = null) }
                             },
                             modifier = Modifier.clickable(enabled = canUseRoot() && !loading) {
-                                runOp(listOf("module", "install", installZip.trim()))
+                                val zip = installZip.trim()
+                                scope.launch {
+                                    if (!canUseRoot() || loading) return@launch
+                                    loading = true
+                                    val r = ReidClient.exec(ctx, listOf("module", "install", zip), timeoutMs = 180_000L)
+                                    opError = if (r.exitCode == 0) null else "exit=${r.exitCode}"
+                                    loading = false
+                                    if (r.exitCode == 0) {
+                                        installZip = ""
+                                        installZipLabel = ""
+                                        pendingInstall = null
+                                        refresh()
+                                    }
+                                }
                             },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
@@ -202,20 +233,28 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                 ReiCard {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         ListItem(
-                            headlineContent = { Text(m.name) },
+                            headlineContent = {
+                                Text(
+                                    m.name,
+                                    textDecoration = if (m.remove) TextDecoration.LineThrough else null,
+                                )
+                            },
                             supportingContent = {
                                 val ver = buildString {
                                     if (m.version.isNotBlank()) append(m.version) else append("unknown")
                                     if (m.author.isNotBlank()) append(" · ").append(m.author)
                                     append("\n").append(m.id)
                                 }
-                                Text(ver)
+                                Text(
+                                    ver,
+                                    textDecoration = if (m.remove) TextDecoration.LineThrough else null,
+                                )
                             },
                             leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
                             trailingContent = {
                                 Switch(
                                     checked = m.enabled,
-                                    enabled = canUseRoot() && !loading,
+                                    enabled = canUseRoot() && !loading && !m.remove,
                                     onCheckedChange = { on ->
                                         runOp(listOf("module", if (on) "enable" else "disable", m.id))
                                     },
@@ -224,7 +263,12 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
                         if (m.description.isNotBlank()) {
-                            Text(m.description, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                            Text(
+                                text = m.description,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         Row(
                             modifier = Modifier
@@ -232,15 +276,23 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            OutlinedButton(
+                            IconButton(
                                 enabled = canUseRoot() && !loading,
-                                onClick = { runOp(listOf("module", "uninstall", m.id)) },
-                            ) { Text("卸载") }
+                                onClick = {
+                                    runOp(listOf("module", if (m.remove) "undo-uninstall" else "uninstall", m.id))
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = if (m.remove) Icons.Outlined.Replay else Icons.Outlined.DeleteOutline,
+                                    contentDescription = if (m.remove) "取消卸载" else "卸载",
+                                )
+                            }
+
                             if (m.action) {
-                                OutlinedButton(
-                                    enabled = canUseRoot() && !loading,
+                                IconButton(
+                                    enabled = canUseRoot() && !loading && !m.remove,
                                     onClick = { runOp(listOf("module", "action", m.id), timeoutMs = 180_000L, refreshAfter = false) },
-                                ) { Text("Action") }
+                                ) { Icon(Icons.Outlined.PlayArrow, contentDescription = "Action") }
                             }
                             Spacer(Modifier.weight(1f))
                             Text(
@@ -265,15 +317,6 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
         }
     }
-
-    if (showOutput && lastOutput != null) {
-        AlertDialog(
-            onDismissRequest = { showOutput = false },
-            title = { Text("reid 输出") },
-            text = { Text(lastOutput ?: "") },
-            confirmButton = { Button(onClick = { showOutput = false }) { Text("关闭") } },
-        )
-    }
 }
 
 private data class ModuleEntry(
@@ -284,6 +327,7 @@ private data class ModuleEntry(
     val description: String,
     val enabled: Boolean,
     val update: Boolean,
+    val remove: Boolean,
     val action: Boolean,
 )
 
@@ -300,6 +344,7 @@ private fun parseModuleListJson(raw: String): List<ModuleEntry> {
             description = o.optString("description"),
             enabled = o.boolCompat("enabled"),
             update = o.boolCompat("update"),
+            remove = o.boolCompat("remove"),
             action = o.boolCompat("action"),
         )
     }
@@ -314,5 +359,48 @@ private fun JSONObject.boolCompat(key: String): Boolean {
         is Number -> v.toInt() != 0
         else -> optString(key).equals("true", ignoreCase = true) || optString(key) == "1"
     }
+}
+
+private data class PendingInstall(
+    val id: String,
+    val name: String,
+    val version: String,
+    val author: String,
+)
+
+private fun scanModuleZip(path: String): PendingInstall? {
+    return runCatching {
+        ZipFile(path).use { z ->
+            val entry = z.getEntry("module.prop") ?: run {
+                val e = z.entries()
+                var found: java.util.zip.ZipEntry? = null
+                while (e.hasMoreElements()) {
+                    val it = e.nextElement()
+                    if (it.name == "module.prop" || it.name.endsWith("/module.prop")) {
+                        found = it
+                        break
+                    }
+                }
+                found
+            } ?: return null
+            val text = z.getInputStream(entry).bufferedReader().use { it.readText() }
+            val props = HashMap<String, String>()
+            text.lineSequence().forEach { line ->
+                val t = line.trim()
+                if (t.isBlank() || t.startsWith("#")) return@forEach
+                val idx = t.indexOf('=')
+                if (idx <= 0) return@forEach
+                val k = t.substring(0, idx).trim()
+                val v = t.substring(idx + 1).trim()
+                props[k] = v
+            }
+            PendingInstall(
+                id = props["id"].orEmpty(),
+                name = props["name"].orEmpty(),
+                version = props["version"].orEmpty().ifBlank { props["versionCode"].orEmpty() },
+                author = props["author"].orEmpty(),
+            )
+        }
+    }.getOrNull()
 }
 
