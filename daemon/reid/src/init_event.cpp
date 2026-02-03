@@ -1,5 +1,6 @@
 #include "init_event.hpp"
 #include "assets.hpp"
+#include "core/allowlist.hpp"
 #include "binder/murasaki_binder.hpp"
 #include "binder/shizuku_service.hpp"
 #include "core/hide_bootloader.hpp"
@@ -278,6 +279,10 @@ int run_daemon() {
     } else {
         LOGI("Switched to global mount namespace");
     }
+
+    auto root_impl_opt = read_file(ROOT_IMPL_CONFIG_PATH);
+    std::string root_impl = root_impl_opt ? trim(*root_impl_opt) : "ksu";
+    allowlist_sync_to_backend(root_impl);
 
     // Patch SEPolicy to allow Binder communication
     // Essential for App <-> ksud (su domain) communication

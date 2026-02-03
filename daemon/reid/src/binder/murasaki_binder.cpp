@@ -5,9 +5,10 @@
 #ifdef __ANDROID__
 
 #include "murasaki_binder.hpp"
-#include "../ksud/ksucalls.hpp"
+#include "../core/allowlist.hpp"
 #include "../defs.hpp"
 #include "../log.hpp"
+#include "../ksud/ksucalls.hpp"
 #include "../ksud/sepolicy/sepolicy.hpp"
 #include "../utils.hpp"
 #include "binder_wrapper.hpp"
@@ -51,47 +52,6 @@ static void* Binder_onCreate(void* args) {
 static void Binder_onDestroy(void* userData) {
     (void)userData;
 }
-
-// KernelSU allowlist binary format structures
-// Matches kernel/app_profile.h
-constexpr uint32_t KSU_ALLOWLIST_MAGIC = 0x7f4b5355;
-constexpr uint32_t KSU_MAX_PACKAGE_NAME = 256;
-constexpr int KSU_MAX_GROUPS = 32;
-constexpr int KSU_SELINUX_DOMAIN = 64;
-
-struct root_profile {
-    int32_t uid;
-    int32_t gid;
-    int32_t groups_count;
-    int32_t groups[KSU_MAX_GROUPS];
-    struct {
-        uint64_t effective;
-        uint64_t permitted;
-        uint64_t inheritable;
-    } capabilities;
-    char selinux_domain[KSU_SELINUX_DOMAIN];
-    int32_t namespaces;
-};
-
-struct non_root_profile {
-    uint8_t umount_modules;
-};
-
-struct app_profile {
-    uint32_t version;
-    char key[KSU_MAX_PACKAGE_NAME];
-    int32_t current_uid;
-    uint8_t allow_su;
-
-    // The kernel structure alignment will insert padding here
-    // to ensure the union (containing u64) is 8-byte aligned.
-    // We rely on the compiler to match kernel layout.
-
-    union {
-        root_profile root;
-        non_root_profile non_root;
-    };
-};
 
 }  // namespace
 
@@ -293,30 +253,7 @@ uid_t MurasakiBinderService::getCallingUid() {
 bool MurasakiBinderService::isUidGrantedRoot(uid_t uid) {
     if (uid == 0)
         return true;
-
-    const char* allowlist_path = "/data/adb/ksu/.allowlist";
-    std::ifstream ifs(allowlist_path, std::ios::binary);
-    if (!ifs) {
-        return false;
-    }
-
-    uint32_t magic;
-    uint32_t version;
-    if (!ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic)) ||
-        !ifs.read(reinterpret_cast<char*>(&version), sizeof(version))) {
-        return false;
-    }
-    if (magic != KSU_ALLOWLIST_MAGIC) {
-        return false;
-    }
-
-    app_profile profile;
-    while (ifs.read(reinterpret_cast<char*>(&profile), sizeof(profile))) {
-        if (profile.current_uid == static_cast<int32_t>(uid)) {
-            return profile.allow_su != 0;
-        }
-    }
-    return false;
+    return allowlist_contains_uid(static_cast<int32_t>(uid));
 }
 
 // ==================== Transaction Handler ====================
@@ -418,24 +355,34 @@ binder_status_t MurasakiBinderService::onTransact(AIBinder* binder, transaction_
         BW.AParcel_writeBool(out, granted);
         return STATUS_OK;
     }
-    case 12: {  // grantRoot(int uid) - TODO: implement persistent allowlist write
-        (void)in;
-        LOGW("grantRoot not implemented yet (return false)");
+    case 12: {  // grantRoot(int uid)
+        int32_t uid = 0;
+        BW.AParcel_readInt32(in, &uid);
+        std::string pkg = allowlist_get_package_for_uid(uid);
+        if (pkg.empty())
+            pkg = "?";
+        bool added = allowlist_add(uid, pkg);
+        bool pushed = allowlist_grant_to_backend(uid, pkg);
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, false);
+        BW.AParcel_writeBool(out, added && pushed);
         return STATUS_OK;
     }
-    case 13: {  // revokeRoot(int uid) - TODO
-        (void)in;
-        LOGW("revokeRoot not implemented yet (return false)");
+    case 13: {  // revokeRoot(int uid)
+        int32_t uid = 0;
+        BW.AParcel_readInt32(in, &uid);
+        allowlist_remove_by_uid(uid);
+        bool revoked = allowlist_revoke_from_backend(uid);
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, false);
+        BW.AParcel_writeBool(out, revoked);
         return STATUS_OK;
     }
-    case 14: {  // getRootUids() - TODO (return empty array)
+    case 14: {  // getRootUids()
+        std::vector<int32_t> uids = allowlist_uids();
         WRITE_NO_EXCEPTION();
-        // int[] format: length then elements
-        BW.AParcel_writeInt32(out, 0);
+        BW.AParcel_writeInt32(out, static_cast<int32_t>(uids.size()));
+        for (int32_t u : uids) {
+            BW.AParcel_writeInt32(out, u);
+        }
         return STATUS_OK;
     }
     case 20: {  // getHymoFsService()

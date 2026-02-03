@@ -133,6 +133,7 @@ set(SOURCES
     src/core/restorecon.cpp
     src/core/assets.cpp
     src/core/hide_bootloader.cpp
+    src/core/allowlist.cpp
     src/flash/flash_ak3.cpp
     src/flash/flash_partition.cpp
     src/init_event.cpp

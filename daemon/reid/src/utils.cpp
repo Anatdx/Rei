@@ -2,6 +2,7 @@
 #include "ksud/boot/boot_patch.hpp"
 #include "core/assets.hpp"
 #include "ksud/ksucalls.hpp"
+#include "core/allowlist.hpp"
 #include "core/restorecon.hpp"
 #include "defs.hpp"
 #include "log.hpp"
@@ -528,6 +529,7 @@ int install(const std::optional<std::string>& magiskboot_path) {
     if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
         LOGW("Failed to create symlink: %s", strerror(errno));
     }
+    allowlist_sync_to_backend(impl);
 
     // Copy magiskboot if provided
     if (magiskboot_path) {
@@ -582,6 +584,7 @@ int set_root_impl(const std::string& impl) {
     if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
         LOGW("Failed to create symlink: %s", strerror(errno));
     }
+    allowlist_sync_to_backend(impl);
     return 0;
 }
 
