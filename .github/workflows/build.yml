@@ -42,6 +42,17 @@ jobs:
           echo "Generated Version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Check signing config
+        id: check_signing
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "signing_configured=true" >> $GITHUB_OUTPUT
+          else
+            echo "signing_configured=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -68,7 +79,7 @@ jobs:
       - name: Sign Release
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: steps.check_signing.outputs.signing_configured == 'true'
         continue-on-error: true
         uses: kevin-david/zipalign-sign-android-release@v2
         id: sign_app
@@ -83,7 +94,7 @@ jobs:
       - name: Sign Debug APK
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: steps.check_signing.outputs.signing_configured == 'true'
         continue-on-error: true
         uses: kevin-david/zipalign-sign-android-release@v2
         id: sign_debug_app
@@ -138,9 +149,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload build artifact
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: steps.check_signing.outputs.signing_configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Rei
@@ -151,7 +160,7 @@ jobs:
             ${{ steps.sign_debug_app.outputs.signedReleaseFile }}.sig
 
       - name: Upload build artifact (unsigned)
-        if: ${{ secrets.SIGNING_KEY == '' }}
+        if: steps.check_signing.outputs.signing_configured != 'true'
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -187,9 +196,7 @@ jobs:
           fi
 
       - name: Release APK
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ secrets.SIGNING_KEY != '' && github.ref_type == 'tag' }}
+        if: steps.check_signing.outputs.signing_configured == 'true' && github.ref_type == 'tag'
         continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
