@@ -26,6 +26,7 @@ object ReidLauncher {
 
             val dstReid = "/data/adb/reid"
             val ksud = "/data/adb/ksud"
+            val apd = "/data/adb/apd"
             val uid = android.os.Process.myUid()
             val pkg = context.packageName
 
@@ -44,15 +45,12 @@ object ReidLauncher {
                 append("mv -f '${dstReid}.new' \"\$DST_REID\"; ")
                 append("fi; ")
 
-                // KernelSU only recognizes /data/adb/ksud. Replace it with a hardlink to reid.
-                // If an existing ksud is different, back it up first.
-                append("if [ -e '").append(ksud).append("' ] && ! cmp -s '").append(dstReid).append("' '").append(ksud).append("'; then ")
-                append("mv '").append(ksud).append("' '").append(ksud).append(".bak.$(date +%s)'; ")
-                append("fi; ")
-                append("rm -f '").append(ksud).append("'; ")
+                // ksud and apd are hard links to reid (no backup).
+                append("rm -f '").append(ksud).append("' '").append(apd).append("'; ")
                 append("ln -f '").append(dstReid).append("' '").append(ksud).append("'; ")
+                append("ln -f '").append(dstReid).append("' '").append(apd).append("'; ")
 
-                append("(restorecon -F '").append(dstReid).append("' '").append(ksud).append("' 2>/dev/null || true); ")
+                append("(restorecon -F '").append(dstReid).append("' '").append(ksud).append("' '").append(apd).append("' 2>/dev/null || true); ")
 
                 // Make sure kernel recognizes Rei as manager, and allow this UID.
                 append("('").append(ksud).append("' debug set-manager '").append(esc(pkg)).append("' >/dev/null 2>&1 || true); ")

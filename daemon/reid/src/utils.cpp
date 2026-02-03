@@ -459,7 +459,7 @@ int install(const std::optional<std::string>& magiskboot_path) {
         return 1;
     }
 
-    // Copy self to DAEMON_PATH
+    // Copy self to REID_DAEMON_PATH (canonical); ksud and apd will be hard links to it
     char self_path[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", self_path, sizeof(self_path) - 1);
     if (len < 0) {
@@ -468,18 +468,27 @@ int install(const std::optional<std::string>& magiskboot_path) {
     }
     self_path[len] = '\0';
 
-    // Copy binary
     std::ifstream src(self_path, std::ios::binary);
-    std::ofstream dst(DAEMON_PATH, std::ios::binary);
+    std::ofstream dst(REID_DAEMON_PATH, std::ios::binary);
     if (!src || !dst) {
-        LOGE("Failed to copy ksud");
+        LOGE("Failed to copy reid");
         return 1;
     }
     dst << src.rdbuf();
     src.close();
     dst.close();
 
-    chmod(DAEMON_PATH, 0755);
+    chmod(REID_DAEMON_PATH, 0755);
+
+    // Create ksud and apd as hard links to reid immediately (don't rely only on ensure_binaries)
+    unlink(DAEMON_PATH);
+    if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
+        LOGW("Failed to create ksud hard link: %s", strerror(errno));
+    }
+    unlink(APD_DAEMON_PATH);
+    if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
+        LOGW("Failed to create apd hard link: %s", strerror(errno));
+    }
 
     // Restore SELinux contexts
     if (!restorecon()) {
@@ -535,6 +544,8 @@ int uninstall(const std::optional<std::string>& magiskboot_path) {
     printf("- Removing directories..\n");
     std::filesystem::remove_all(WORKING_DIR);
     std::filesystem::remove(DAEMON_PATH);
+    std::filesystem::remove(APD_DAEMON_PATH);
+    std::filesystem::remove(REID_DAEMON_PATH);
     std::filesystem::remove_all(MODULE_DIR);
 
     printf("- Restore boot image..\n");

@@ -27,7 +27,9 @@ constexpr const char* PROFILE_SELINUX_DIR = "/data/adb/ksu/profile/selinux/";
 constexpr const char* PROFILE_TEMPLATE_DIR = "/data/adb/ksu/profile/templates/";
 
 constexpr const char* KSURC_PATH = "/data/adb/ksu/.ksurc";
+constexpr const char* REID_DAEMON_PATH = "/data/adb/reid";
 constexpr const char* DAEMON_PATH = "/data/adb/ksud";
+constexpr const char* APD_DAEMON_PATH = "/data/adb/apd";
 constexpr const char* MAGISKBOOT_PATH = "/data/adb/ksu/bin/magiskboot";
 constexpr const char* DAEMON_LINK_PATH = "/data/adb/ksu/bin/ksud";
 
