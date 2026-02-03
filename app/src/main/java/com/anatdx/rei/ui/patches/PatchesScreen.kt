@@ -46,6 +46,102 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private sealed class KpimgResult {
+    data class Ok(val output: String) : KpimgResult()
+    data class Err(val message: String) : KpimgResult()
+}
+
+private data class KpimgInfo(
+    val version: String,
+    val compileTime: String,
+    val config: String,
+)
+
+private fun parseKpimgOutput(raw: String): KpimgInfo? {
+    val lines = raw.lines()
+    var inKpimg = false
+    val map = mutableMapOf<String, String>()
+    for (line in lines) {
+        val trimmed = line.trim()
+        when {
+            trimmed.startsWith("[") && trimmed.endsWith("]") -> {
+                inKpimg = trimmed.equals("[kpimg]", ignoreCase = true)
+            }
+            inKpimg && trimmed.contains("=") -> {
+                val idx = trimmed.indexOf('=')
+                val key = trimmed.substring(0, idx).trim()
+                val value = trimmed.substring(idx + 1).trim()
+                map[key] = value
+            }
+        }
+    }
+    val version = map["version"]?.ifBlank { null } ?: return null
+    return KpimgInfo(
+        version = version,
+        compileTime = map["compile_time"]?.ifBlank { null } ?: "-",
+        config = map["config"]?.ifBlank { null } ?: "-",
+    )
+}
+
+private suspend fun runKpimgInfo(context: android.content.Context): KpimgResult =
+    kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val patchDir = java.io.File(context.cacheDir, "patch").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val kpimgFile = java.io.File(patchDir, "kpimg")
+        val kptoolsFile = java.io.File(patchDir, "kptools")
+        val apkPath = context.applicationInfo.sourceDir
+        val kpimgOk: Boolean = runCatching {
+            context.assets.open("kpimg").use { input ->
+                kpimgFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            true
+        }.getOrElse {
+            runCatching {
+                java.util.zip.ZipFile(apkPath).use { zip ->
+                    zip.getEntry("assets/kpimg")?.let { entry ->
+                        zip.getInputStream(entry).use { input ->
+                            kpimgFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        true
+                    } ?: false
+                }
+            }.getOrElse { false }
+        }
+        if (!kpimgOk || !kpimgFile.exists()) {
+            return@withContext KpimgResult.Err("无法获取 kpimg（assets 或 APK 内均无）")
+        }
+        val libDir = java.io.File(context.applicationInfo.nativeLibraryDir)
+        val libKptools = java.io.File(libDir, "libkptools.so")
+        val kptoolsOk = if (libKptools.exists()) {
+            libKptools.copyTo(kptoolsFile, overwrite = true)
+            true
+        } else {
+            runCatching {
+                val abi = "arm64-v8a"
+                java.util.zip.ZipFile(apkPath).use { zip ->
+                    zip.getEntry("lib/$abi/libkptools.so")?.let { entry ->
+                        zip.getInputStream(entry).use { input ->
+                            kptoolsFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        true
+                    } ?: false
+                }
+            }.getOrElse { false }
+        }
+        if (!kptoolsOk || !kptoolsFile.exists()) {
+            return@withContext KpimgResult.Err("未找到 kptools/libkptools.so（请确保 APK 内已打包或构建时已执行 downloadKptools）")
+        }
+        val patchPath = patchDir.absolutePath
+        val cmd = "cd $patchPath && chmod 700 kptools kpimg && LD_LIBRARY_PATH=$patchPath ./kptools -l -k kpimg"
+        val result = com.anatdx.rei.core.root.RootShell.exec(cmd, timeoutMs = 15_000L)
+        if (result.exitCode != 0) {
+            return@withContext KpimgResult.Err("exit=${result.exitCode}\n${result.output}")
+        }
+        KpimgResult.Ok(result.output.ifBlank { "(无输出)" })
+    }
+
 @Composable
 fun PatchesScreen(
     rootGranted: Boolean,
@@ -59,6 +155,24 @@ fun PatchesScreen(
 
     LaunchedEffect(kpimgOutput) {
         kpimgOutput?.let { scrollState.animateScrollTo(scrollState.maxValue) }
+    }
+
+    fun doRefresh() {
+        if (!rootGranted) {
+            error = "需要 Root 权限"
+        } else {
+            loading = true
+            error = null
+            kpimgOutput = null
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { runKpimgInfo(ctx) }
+                loading = false
+                when (result) {
+                    is KpimgResult.Ok -> kpimgOutput = result.output
+                    is KpimgResult.Err -> error = result.message
+                }
+            }
+        }
     }
 
     Column(
@@ -94,25 +208,7 @@ fun PatchesScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(
-                    onClick = {
-                        if (!rootGranted) {
-                            error = "需要 Root 权限"
-                            return@Button
-                        }
-                        loading = true
-                        error = null
-                        kpimgOutput = null
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) { runKpimgInfo(ctx) }
-                            loading = false
-                            when (result) {
-                                is KpimgResult.Ok -> {
-                                    kpimgOutput = result.output
-                                }
-                                is KpimgResult.Err -> error = result.message
-                            }
-                        }
-                    },
+                    onClick = { doRefresh() },
                     enabled = !loading,
                 ) {
                     if (loading) {
@@ -238,106 +334,3 @@ private fun SuperKeyInputCard() {
         }
     }
 }
-
-private sealed class KpimgResult {
-    data class Ok(val output: String) : KpimgResult()
-    data class Err(val message: String) : KpimgResult()
-}
-
-/** kptools -l -k kpimg 输出的结构化信息（INI [kpimg] 段） */
-private data class KpimgInfo(
-    val version: String,
-    val compileTime: String,
-    val config: String,
-)
-
-/** 简单解析 kptools -l -k 的 INI 风格输出，提取 [kpimg] 下的 version / compile_time / config */
-private fun parseKpimgOutput(raw: String): KpimgInfo? {
-    val lines = raw.lines()
-    var inKpimg = false
-    val map = mutableMapOf<String, String>()
-    for (line in lines) {
-        val trimmed = line.trim()
-        when {
-            trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                inKpimg = trimmed.equals("[kpimg]", ignoreCase = true)
-            }
-            inKpimg && trimmed.contains("=") -> {
-                val idx = trimmed.indexOf('=')
-                val key = trimmed.substring(0, idx).trim()
-                val value = trimmed.substring(idx + 1).trim()
-                map[key] = value
-            }
-        }
-    }
-    val version = map["version"]?.ifBlank { null } ?: return null
-    return KpimgInfo(
-        version = version,
-        compileTime = map["compile_time"]?.ifBlank { null } ?: "-",
-        config = map["config"]?.ifBlank { null } ?: "-",
-    )
-}
-
-private suspend fun runKpimgInfo(context: android.content.Context): KpimgResult =
-    kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val patchDir = java.io.File(context.cacheDir, "patch").apply {
-            deleteRecursively()
-            mkdirs()
-        }
-        val kpimgFile = java.io.File(patchDir, "kpimg")
-        val kptoolsFile = java.io.File(patchDir, "kptools")
-        val apkPath = context.applicationInfo.sourceDir
-
-        // kpimg: 优先 assets，否则从 APK 解压 assets/kpimg
-        val kpimgOk: Boolean = runCatching {
-            context.assets.open("kpimg").use { input ->
-                kpimgFile.outputStream().use { output -> input.copyTo(output) }
-            }
-            true
-        }.getOrElse {
-            runCatching {
-                java.util.zip.ZipFile(apkPath).use { zip ->
-                    zip.getEntry("assets/kpimg")?.let { entry ->
-                        zip.getInputStream(entry).use { input ->
-                            kpimgFile.outputStream().use { output -> input.copyTo(output) }
-                        }
-                        true
-                    } ?: false
-                }
-            }.getOrElse { false }
-        }
-        if (!kpimgOk || !kpimgFile.exists()) {
-            return@withContext KpimgResult.Err("无法获取 kpimg（assets 或 APK 内均无）")
-        }
-
-        // kptools/libkptools: 优先已安装 nativeLibraryDir，否则从 APK 解压 lib/arm64-v8a/libkptools.so
-        val libDir = java.io.File(context.applicationInfo.nativeLibraryDir)
-        val libKptools = java.io.File(libDir, "libkptools.so")
-        val kptoolsOk = if (libKptools.exists()) {
-            libKptools.copyTo(kptoolsFile, overwrite = true)
-            true
-        } else {
-            runCatching {
-                val abi = "arm64-v8a"
-                java.util.zip.ZipFile(apkPath).use { zip ->
-                    zip.getEntry("lib/$abi/libkptools.so")?.let { entry ->
-                        zip.getInputStream(entry).use { input ->
-                            kptoolsFile.outputStream().use { output -> input.copyTo(output) }
-                        }
-                        true
-                    } ?: false
-                }
-            }.getOrElse { false }
-        }
-        if (!kptoolsOk || !kptoolsFile.exists()) {
-            return@withContext KpimgResult.Err("未找到 kptools/libkptools.so（请确保 APK 内已打包或构建时已执行 downloadKptools）")
-        }
-
-        val patchPath = patchDir.absolutePath
-        val cmd = "cd $patchPath && chmod 700 kptools kpimg && LD_LIBRARY_PATH=$patchPath ./kptools -l -k kpimg"
-        val result = com.anatdx.rei.core.root.RootShell.exec(cmd, timeoutMs = 15_000L)
-        if (result.exitCode != 0) {
-            return@withContext KpimgResult.Err("exit=${result.exitCode}\n${result.output}")
-        }
-        KpimgResult.Ok(result.output.ifBlank { "(无输出)" })
-    }

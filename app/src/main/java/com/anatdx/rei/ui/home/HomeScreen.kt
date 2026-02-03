@@ -63,9 +63,17 @@ fun HomeScreen(
     onOpenBootTools: () -> Unit,
 ) {
     var refreshKey by remember { mutableStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(rootAccessState) {
+        if (isRefreshing) isRefreshing = false
+    }
     PullToRefreshBox(
-        refreshing = false,
-        onRefresh = { refreshKey++; onRefreshRoot() },
+        refreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            refreshKey++
+            onRefreshRoot()
+        },
     ) {
         LazyColumn(
             modifier = Modifier.padding(horizontal = 16.dp),

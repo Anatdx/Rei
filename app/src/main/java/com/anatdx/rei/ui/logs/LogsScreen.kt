@@ -64,27 +64,24 @@ fun LogsScreen() {
     }
 
     LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { Spacer(Modifier.height(4.dp)) }
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
-        item {
-            ReiCard {
-                ListItem(
-                    headlineContent = { Text("日志") },
-                    supportingContent = {
-                        Text(
-                            if (lines.isEmpty()) "暂无日志"
-                            else "共 ${lines.size} 行（仅显示最近 3000 行）"
-                        )
-                    },
-                    leadingContent = { Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = null) },
-                    trailingContent = {
-                        Row {
-                            IconButton(onClick = { scope.launch { refresh() } }) {
-                                Icon(Icons.Outlined.Refresh, contentDescription = null)
-                            }
+            item {
+                ReiCard {
+                    ListItem(
+                        headlineContent = { Text("日志") },
+                        supportingContent = {
+                            Text(
+                                if (lines.isEmpty()) "暂无日志"
+                                else "共 ${lines.size} 行（仅显示最近 3000 行）"
+                            )
+                        },
+                        leadingContent = { Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = null) },
+                        trailingContent = {
+                            Row {
                             IconButton(
                                 onClick = {
                                     scope.launch {
@@ -154,6 +151,6 @@ fun LogsScreen() {
         }
 
         item { Spacer(Modifier.height(16.dp)) }
-    }
+        }
 }
 

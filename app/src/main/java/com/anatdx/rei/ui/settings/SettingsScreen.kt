@@ -93,11 +93,11 @@ fun SettingsScreen(
     onOpenBootTools: () -> Unit,
     onOpenPatches: () -> Unit = {},
 ) {
-    LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { Spacer(Modifier.height(4.dp)) }
+        LazyColumn(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
         item {
             SuperkeyCard()

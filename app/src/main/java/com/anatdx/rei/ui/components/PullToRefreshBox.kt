@@ -1,15 +1,12 @@
 package com.anatdx.rei.ui.components
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.SwipeRefresh
-import androidx.compose.material.rememberSwipeRefreshState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PullToRefreshBox(
     refreshing: Boolean,
@@ -17,11 +14,11 @@ fun PullToRefreshBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    SwipeRefresh(
-        state = rememberSwipeRefreshState(refreshing),
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
-        content = content,
-        contentColor = MaterialTheme.colorScheme.primary,
+        state = rememberPullToRefreshState(),
+        content = { content() },
     )
 }

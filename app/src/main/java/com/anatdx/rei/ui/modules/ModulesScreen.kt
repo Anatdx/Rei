@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.anatdx.rei.core.io.UriFiles
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
+import com.anatdx.rei.ui.components.PullToRefreshBox
 import com.anatdx.rei.ui.components.ReiCard
 import me.weishu.kernelsu.ui.webui.WebUIActivity
 import kotlinx.coroutines.launch
@@ -129,8 +130,12 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
         if (canUseRoot()) refresh()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
+    PullToRefreshBox(
+        refreshing = loading,
+        onRefresh = { scope.launch { refresh() } },
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -154,12 +159,6 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 )
                             },
                             leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
-                            trailingContent = {
-                                IconButton(
-                                    enabled = canUseRoot() && !loading,
-                                    onClick = { scope.launch { refresh() } },
-                                ) { Icon(Icons.Outlined.Refresh, contentDescription = null) }
-                            },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
                         if (listError != null) {
@@ -330,6 +329,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                 .padding(16.dp),
         ) {
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+        }
         }
     }
 }
