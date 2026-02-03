@@ -66,7 +66,21 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools build-tools;36.1.0 build-tools;33.0.0 ndk;29.0.14206865'
+          packages: 'platform-tools build-tools;36.1.0 ndk;29.0.14206865'
+
+      - name: Prepare signing keystore
+        if: steps.check_signing.outputs.signing_configured == 'true'
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ALIAS: ${{ vars.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/rei.jks"
+          echo "REI_KEYSTORE=$RUNNER_TEMP/rei.jks" >> $GITHUB_ENV
+          echo "REI_KEY_ALIAS=$ALIAS" >> $GITHUB_ENV
+          echo "REI_KEYSTORE_PASSWORD=$KEY_STORE_PASSWORD" >> $GITHUB_ENV
+          echo "REI_KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
 
       - name: Build with Gradle
         env:
@@ -75,38 +89,6 @@ jobs:
         run: |
           printf '\norg.gradle.parallel=true\norg.gradle.jvmargs=-Xmx2048m\n' >> gradle.properties
           ./gradlew clean assembleDebug assembleRelease
-
-      - name: Sign Release
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-        if: steps.check_signing.outputs.signing_configured == 'true'
-        continue-on-error: true
-        uses: kevin-david/zipalign-sign-android-release@v2
-        id: sign_app
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ vars.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-          zipAlign: true
-
-      - name: Sign Debug APK
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-        if: steps.check_signing.outputs.signing_configured == 'true'
-        continue-on-error: true
-        uses: kevin-david/zipalign-sign-android-release@v2
-        id: sign_debug_app
-        with:
-          releaseDirectory: app/build/outputs/apk/debug
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ vars.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-          zipAlign: true
 
       - name: Import GPG key
         env:
@@ -129,8 +111,8 @@ jobs:
             echo "GPG_PRIVATE_KEY not set, skipping."
             exit 0
           fi
-          RELEASE_APK="${{ steps.sign_app.outputs.signedReleaseFile }}"
-          DEBUG_APK="${{ steps.sign_debug_app.outputs.signedReleaseFile }}"
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
           if [ -n "$GPG_FINGERPRINT" ]; then
             KEY_ARG="--local-user $GPG_FINGERPRINT"
           else
@@ -156,10 +138,10 @@ jobs:
         with:
           name: Rei
           path: |
-            ${{ steps.sign_app.outputs.signedReleaseFile }}
-            ${{ steps.sign_debug_app.outputs.signedReleaseFile }}
-            ${{ steps.sign_app.outputs.signedReleaseFile }}.sig
-            ${{ steps.sign_debug_app.outputs.signedReleaseFile }}.sig
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk.sig
+            app/build/outputs/apk/debug/app-debug.apk.sig
 
       - name: Upload build artifact (unsigned)
         if: steps.check_signing.outputs.signing_configured != 'true'
@@ -191,8 +173,8 @@ jobs:
           fi
           python3 -m pip install --upgrade pip
           python3 -m pip install telethon==1.34.0
-          RELEASE_APK="${{ steps.sign_app.outputs.signedReleaseFile }}"
-          DEBUG_APK="${{ steps.sign_debug_app.outputs.signedReleaseFile }}"
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
           if [ -f "$RELEASE_APK" ] && [ -f "$DEBUG_APK" ]; then
             python3 scripts/reibot.py "$RELEASE_APK" "$DEBUG_APK"
           fi
@@ -204,7 +186,7 @@ jobs:
         with:
           token: ${{ github.token }}
           tag: ${{ steps.parse_version.outputs.VERSION }}
-          artifacts: ${{ steps.sign_app.outputs.signedReleaseFile }},${{ steps.sign_app.outputs.signedReleaseFile }}.sig
+          artifacts: app/build/outputs/apk/release/app-release.apk,app/build/outputs/apk/release/app-release.apk.sig
           generateReleaseNotes: true
           makeLatest: true
           replacesArtifacts: true
