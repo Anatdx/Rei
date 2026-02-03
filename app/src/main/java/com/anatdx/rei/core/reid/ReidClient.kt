@@ -1,6 +1,8 @@
 package com.anatdx.rei.core.reid
 
 import android.content.Context
+import com.anatdx.rei.ReiApplication
+import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.log.ReiLog
 import com.anatdx.rei.core.log.ReiLogLevel
 import kotlinx.coroutines.Dispatchers
@@ -58,15 +60,21 @@ object ReidClient {
         }
     }
 
-    /** Run current backend (ksud/apd/reid). Args escaped in single su -c to avoid sh/$@ splitting. */
+    /** Run current backend (ksud/apd/reid). For apd, manager passes --superkey. Runs via su -c so behavior matches apd (authorized apps use su to get root). */
     suspend fun exec(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
             val backendArgs = args.joinToString(" ") { shellEscape(it) }
-            val cmd = "if [ -x /data/adb/ksud ]; then exec /data/adb/ksud $backendArgs; elif [ -x /data/adb/apd ]; then exec /data/adb/apd $backendArgs; elif [ -x /data/adb/reid ]; then exec /data/adb/reid $backendArgs; else echo no_installed_backend; exit 127; fi"
-            return@withContext runShellSu(cmd, context, args, timeoutMs)
+            if (ReiApplication.superKey.isEmpty()) {
+                ReiKeyHelper.readSuperKey().takeIf { it.isNotEmpty() }?.let { ReiApplication.superKey = it }
+            }
+            val apdSuperkey = ReiApplication.superKey
+            val apdKeyArg = if (apdSuperkey.isNotEmpty()) " --superkey ${shellEscape(apdSuperkey)}" else ""
+            val cmd = "if [ -x /data/adb/ksud ]; then exec /data/adb/ksud $backendArgs; elif [ -x /data/adb/apd ]; then exec /data/adb/apd$apdKeyArg $backendArgs; elif [ -x /data/adb/reid ]; then exec /data/adb/reid $backendArgs; else echo no_installed_backend; exit 127; fi"
+            runShellSu(cmd, context, args, timeoutMs)
         }
     }
 
+    /** Run command with root via su -c (same as apd: authorized apps run su to get shell). */
     private fun runShellSu(cmd: String, context: Context, args: List<String>, timeoutMs: Long): ReidExecResult {
         return runCatching {
             val p = ProcessBuilder("su", "-c", cmd)

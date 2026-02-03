@@ -170,4 +170,22 @@ Java_com_anatdx_rei_ApNatives_nativeRevokeSu(JNIEnv *env, jclass clazz,
     return static_cast<jlong>(rc);
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_anatdx_rei_ApNatives_nativeResetSuPath(JNIEnv *env, jclass clazz,
+        jstring super_key_jstr, jstring su_path_jstr) {
+    (void)clazz;
+    if (!super_key_jstr || !su_path_jstr) return JNI_FALSE;
+    const char *key = env->GetStringUTFChars(super_key_jstr, nullptr);
+    if (!key) return JNI_FALSE;
+    const char *path = env->GetStringUTFChars(su_path_jstr, nullptr);
+    if (!path) {
+        env->ReleaseStringUTFChars(super_key_jstr, key);
+        return JNI_FALSE;
+    }
+    long rc = sc_su_reset_path(key, path);
+    env->ReleaseStringUTFChars(super_key_jstr, key);
+    env->ReleaseStringUTFChars(su_path_jstr, path);
+    return (rc == 0) ? JNI_TRUE : JNI_FALSE;
+}
+
 }  // extern "C"

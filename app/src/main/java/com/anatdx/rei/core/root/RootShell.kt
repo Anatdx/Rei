@@ -21,6 +21,12 @@ data class RootExecResult(
 object RootShell {
     suspend fun request(timeoutMs: Long = 8_000L): RootResult {
         return withContext(Dispatchers.IO) {
+            // If KernelPatch/APatch is active and superkey is set, treat as root without calling su
+            // (su may be denied or not prompt on KP-only devices)
+            val superKey = ReiApplication.superKey
+            if (superKey.isNotEmpty() && ReiKeyHelper.isValidSuperKey(superKey) && ApNatives.ready(superKey)) {
+                return@withContext RootResult.Granted("KernelPatch")
+            }
             try {
                 val p = ProcessBuilder("su", "-c", "id")
                     .redirectErrorStream(true)

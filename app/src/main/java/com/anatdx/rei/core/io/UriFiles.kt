@@ -25,6 +25,10 @@ object UriFiles {
         }.getOrNull()
     }
 
+    fun getFileName(context: Context, uri: Uri): String? {
+        return queryDisplayName(context, uri)
+    }
+
     private fun queryDisplayName(context: Context, uri: Uri): String? {
         var c: Cursor? = null
         return try {

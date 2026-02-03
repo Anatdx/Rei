@@ -26,6 +26,10 @@ object ApNatives {
     @Keep
     external fun nativeSuPath(superKey: String): String
 
+    /** Reset su path in kernel (sc 0x1111); so authorized apps running su get root. Same as IcePatch. */
+    @Keep
+    private external fun nativeResetSuPath(superKey: String, path: String): Boolean
+
     /** KernelPatch version (e.g. 0x000a0700 for 0.10.7). */
     @Keep
     external fun nativeKernelPatchVersion(superKey: String): Long
@@ -50,6 +54,7 @@ object ApNatives {
     fun su(superKey: String, toUid: Int = 0, scontext: String? = null): Boolean =
         runCatching { nativeSu(superKey, toUid, scontext) == 0L }.getOrElse { false }
     fun suPath(superKey: String): String = runCatching { nativeSuPath(superKey) }.getOrElse { "" }
+    fun resetSuPath(superKey: String, path: String): Boolean = runCatching { nativeResetSuPath(superKey, path) }.getOrElse { false }
     fun kernelPatchVersion(superKey: String): Long = runCatching { nativeKernelPatchVersion(superKey) }.getOrElse { 0L }
     fun diag(superKey: String): String = runCatching { nativeDiag(superKey) }.getOrElse { "" }
 

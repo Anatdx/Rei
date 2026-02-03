@@ -102,4 +102,12 @@ static inline long sc_su_revoke_uid(const char *key, uid_t uid)
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_REVOKE_UID), uid);
 }
 
+/** Reset su path (sc 0x1111); so kernel uses path for su. Same as IcePatch. */
+static inline long sc_su_reset_path(const char *key, const char *path)
+{
+    if (!key || !key[0]) return -EINVAL;
+    if (!path) return -EINVAL;
+    return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_RESET_PATH), path);
+}
+
 #endif

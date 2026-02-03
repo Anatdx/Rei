@@ -83,16 +83,22 @@ android {
         compose = true
     }
 
+    // So that libmagiskboot.so / libkptools.so can be copied and executed as binaries (was extractNativeLibs in manifest).
+    packaging { jniLibs { useLegacyPackaging = true } }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 
-    // Include generated native outputs (built by Gradle tasks below).
+    // Include generated native outputs (built by Gradle tasks below) and repo-bundled libs (e.g. libmagiskboot.so).
     sourceSets {
         getByName("main") {
             jniLibs.directories.add(layout.buildDirectory.dir("generated/jniLibs").get().asFile.absolutePath)
+            jniLibs.directories.add(file("${project.projectDir}/libs").absolutePath)
+            // Generated assets (e.g. kpimg) so they are packaged into APK; keep default src/main/assets
+            assets.directories.add(layout.buildDirectory.dir("generated/assets").get().asFile.absolutePath)
         }
     }
 }
@@ -358,11 +364,21 @@ fun downloadFile(url: String, destFile: File) {
     }
 }
 
+val kpimgDestFile = project.layout.buildDirectory.file("generated/assets/kpimg").get().asFile
+val removeOldKpimg = tasks.register("removeOldKpimg") {
+    val oldKpimg = file("${project.projectDir}/src/main/assets/kpimg")
+    doLast {
+        if (oldKpimg.exists()) {
+            oldKpimg.delete()
+            println(" - Removed old kpimg from src/main/assets to avoid duplicate.")
+        }
+    }
+}
 val downloadKpimg = registerKernelPatchDownloadTask(
     taskName = "downloadKpimg",
     assetName = "kpimg-android",
-    destPath = "${project.projectDir}/src/main/assets/kpimg",
-)
+    destPath = kpimgDestFile.absolutePath,
+).apply { configure { dependsOn(removeOldKpimg) } }
 val downloadKptools = registerKernelPatchDownloadTask(
     taskName = "downloadKptools",
     assetName = "kptools-android",
@@ -371,6 +387,10 @@ val downloadKptools = registerKernelPatchDownloadTask(
 
 tasks.named("preBuild").configure {
     dependsOn(buildNativeArm64, downloadKpimg, downloadKptools)
+}
+// Ensure kpimg is written before merge*Assets runs (so it gets packaged into APK)
+tasks.matching { it.name.contains("merge") && it.name.contains("Assets") }.configureEach {
+    dependsOn(downloadKpimg)
 }
 
 fun verifyApkHasNative(apk: File, abi: String = "arm64-v8a") {

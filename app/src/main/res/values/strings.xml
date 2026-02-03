@@ -167,7 +167,24 @@
 
     <!-- Patches (KP) -->
     <string name="patches_kp_title">KernelPatch patch</string>
-    <string name="patches_kp_desc">kpimg and kptools are bundled at build time. For full boot patching (e.g. magiskboot) use IcePatch. Here you can view the bundled kpimg info.</string>
+    <string name="patches_kp_desc">Patch stock boot.img with KernelPatch. Supports direct flash if rooted.</string>
+    <string name="patches_select_mode">Patch Mode</string>
+    <string name="patches_install_inactive">Install to Inactive Slot (OTA)</string>
+    <string name="patches_select_boot">Select boot.img</string>
+    <string name="patches_boot_image">Boot Image</string>
+    <string name="patches_select_file">Select file</string>
+    <string name="patches_direct_install">Direct Install (Flash)</string>
+    <string name="patches_patch_btn">Patch</string>
+    <string name="patches_patch_flash_btn">Patch &amp; Flash</string>
+    <string name="patches_save">Save</string>
+    <string name="patches_logs">Logs</string>
+    <string name="patches_starting">Starting patch process…</string>
+    <string name="patches_success">Patch success!</string>
+    <string name="patches_saved">Saved to %s</string>
+    <string name="patches_flash_complete">Flash complete! Reboot to apply.</string>
+    <string name="patches_error_save">Save failed: %s</string>
+    <string name="patches_error_exec">Execution failed: %s</string>
+    <string name="patches_error_script">Patch script failed (exit code %d)</string>
     <string name="patches_view_kpimg">View kpimg info</string>
     <string name="patches_run_kptools">Run kptools -l -k kpimg</string>
     <string name="patches_kpimg_info">kpimg info</string>

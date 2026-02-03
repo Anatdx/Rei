@@ -162,7 +162,24 @@
 
     <!-- Patches (KP) -->
     <string name="patches_kp_title">KernelPatch 修补</string>
-    <string name="patches_kp_desc">构建时已打包 kpimg 与 kptools；完整 boot 修补流程（含 magiskboot 等）建议使用 IcePatch。此处可查看当前打包的 kpimg 信息。</string>
+    <string name="patches_kp_desc">使用 KernelPatch 修补原厂 boot.img。若已 Root 可直接刷入。</string>
+    <string name="patches_select_mode">选择模式</string>
+    <string name="patches_install_inactive">安装到另一槽位 (OTA)</string>
+    <string name="patches_select_boot">选择 boot.img</string>
+    <string name="patches_boot_image">启动镜像</string>
+    <string name="patches_select_file">选择文件</string>
+    <string name="patches_direct_install">直接安装（刷入）</string>
+    <string name="patches_patch_btn">修补</string>
+    <string name="patches_patch_flash_btn">修补并刷入</string>
+    <string name="patches_save">保存</string>
+    <string name="patches_logs">日志</string>
+    <string name="patches_starting">开始修补…</string>
+    <string name="patches_success">修补成功！</string>
+    <string name="patches_saved">已保存至 %s</string>
+    <string name="patches_flash_complete">刷入完成！重启生效。</string>
+    <string name="patches_error_save">保存失败：%s</string>
+    <string name="patches_error_exec">执行失败：%s</string>
+    <string name="patches_error_script">修补脚本失败 (exit code %d)</string>
     <string name="patches_view_kpimg">查看 kpimg 信息</string>
     <string name="patches_run_kptools">运行 kptools -l -k kpimg</string>
     <string name="patches_kpimg_info">kpimg 信息</string>

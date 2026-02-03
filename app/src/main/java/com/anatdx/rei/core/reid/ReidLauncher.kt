@@ -1,6 +1,7 @@
 package com.anatdx.rei.core.reid
 
 import android.content.Context
+import com.anatdx.rei.ApNatives
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.root.RootShell
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,13 @@ object ReidLauncher {
                 val backendBin = if (useApd) "/data/adb/ap/bin" else "/data/adb/ksu/bin"
                 append("mkdir -p '").append(backendBin).append("'; ln -sf '").append(daemonBin).append("' '").append(backendBin).append("/ksud'; ")
                 append("rm -f /data/adb/rei/bin; ln -sf '").append(backendBin).append("' /data/adb/rei/bin; ")
+                // APatch: create su_path so reid daemon can load it (InitLoadSuPath). We write /system/bin/su; when su_path is absent the kernel defaults to /system/bin/kp.
+                if (useApd) {
+                    append("mkdir -p /data/adb/ap; ")
+                    append("touch /data/adb/ap/su_path; ")
+                    append("[ -s /data/adb/ap/su_path ] || echo '/system/bin/su' > /data/adb/ap/su_path; ")
+                    append("killall reid 2>/dev/null; killall apd 2>/dev/null; true; ")  // restart daemon so it loads su_path
+                }
 
                 // KSU: register Rei as manager and allow this UID
                 if (!useApd) {
@@ -79,6 +87,11 @@ object ReidLauncher {
             val install = RootShell.exec(installCmd, timeoutMs = 15_000L)
             if (install.exitCode != 0) {
                 return@withContext ReidStartResult.Failed("install_failed:${install.exitCode}:${install.output.take(160)}")
+            }
+
+            // APatch: tell kernel su path via supercall (same as IcePatch Natives.resetSuPath) so authorized apps running su get root
+            if (ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH && ReiApplication.superKey.isNotEmpty()) {
+                ApNatives.resetSuPath(ReiApplication.superKey, "/system/bin/su")
             }
 
             // Start daemon only when it's not already running.
