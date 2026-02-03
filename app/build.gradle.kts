@@ -34,27 +34,29 @@ android {
         }
     }
 
+    val reiKeystorePath =
+        providers.gradleProperty("REI_KEYSTORE").orNull
+            ?: System.getenv("REI_KEYSTORE")
+            ?: "/Volumes/Workspace/keys/Rei.jks"
+    val reiKeystoreFile = file(reiKeystorePath)
     signingConfigs {
-        create("release") {
-            val keystorePath =
-                providers.gradleProperty("REI_KEYSTORE").orNull
-                    ?: System.getenv("REI_KEYSTORE")
-                    ?: "/Volumes/Workspace/keys/Rei.jks"
-            val keyAliasValue =
-                providers.gradleProperty("REI_KEY_ALIAS").orNull
-                    ?: System.getenv("REI_KEY_ALIAS")
-                    ?: "Rei"
-            val storePasswordValue =
-                providers.gradleProperty("REI_KEYSTORE_PASSWORD").orNull
-                    ?: System.getenv("REI_KEYSTORE_PASSWORD")
-            val keyPasswordValue =
-                providers.gradleProperty("REI_KEY_PASSWORD").orNull
-                    ?: System.getenv("REI_KEY_PASSWORD")
-
-            storeFile = file(keystorePath)
-            storePassword = storePasswordValue ?: ""
-            keyAlias = keyAliasValue
-            keyPassword = keyPasswordValue ?: ""
+        if (reiKeystoreFile.exists()) {
+            create("release") {
+                val keyAliasValue =
+                    providers.gradleProperty("REI_KEY_ALIAS").orNull
+                        ?: System.getenv("REI_KEY_ALIAS")
+                        ?: "Rei"
+                val storePasswordValue =
+                    providers.gradleProperty("REI_KEYSTORE_PASSWORD").orNull
+                        ?: System.getenv("REI_KEYSTORE_PASSWORD")
+                val keyPasswordValue =
+                    providers.gradleProperty("REI_KEY_PASSWORD").orNull
+                        ?: System.getenv("REI_KEY_PASSWORD")
+                storeFile = reiKeystoreFile
+                storePassword = storePasswordValue ?: ""
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue ?: ""
+            }
         }
     }
 
@@ -65,7 +67,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {
@@ -297,12 +299,15 @@ tasks.register("verifyReleaseApkHasNative") {
 gradle.taskGraph.whenReady {
     val wantsRelease = allTasks.any { it.name.contains("Release", ignoreCase = true) }
     if (!wantsRelease) return@whenReady
-
+    val keystorePath =
+        project.providers.gradleProperty("REI_KEYSTORE").orNull
+            ?: System.getenv("REI_KEYSTORE")
+            ?: "/Volumes/Workspace/keys/Rei.jks"
+    if (!file(keystorePath).exists()) return@whenReady
     val storePasswordValue =
-        providers.gradleProperty("REI_KEYSTORE_PASSWORD").orNull ?: System.getenv("REI_KEYSTORE_PASSWORD")
+        project.providers.gradleProperty("REI_KEYSTORE_PASSWORD").orNull ?: System.getenv("REI_KEYSTORE_PASSWORD")
     val keyPasswordValue =
-        providers.gradleProperty("REI_KEY_PASSWORD").orNull ?: System.getenv("REI_KEY_PASSWORD")
-
+        project.providers.gradleProperty("REI_KEY_PASSWORD").orNull ?: System.getenv("REI_KEY_PASSWORD")
     if (storePasswordValue.isNullOrBlank() || keyPasswordValue.isNullOrBlank()) {
         throw GradleException("Release 签名需要提供 REI_KEYSTORE_PASSWORD 与 REI_KEY_PASSWORD（通过环境变量或 Gradle 属性）。")
     }
