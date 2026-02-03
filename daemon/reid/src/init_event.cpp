@@ -162,8 +162,11 @@ int on_post_data_fs() {
     ensure_dir_exists(LOG_DIR);
     ensure_dir_exists(PROFILE_DIR);
 
-    // Ensure binaries exist (AFTER safe mode check, like Rust)
-    if (ensure_binaries(true) != 0) {
+    // Ensure binaries exist in current backend bin (AFTER safe mode check)
+    auto root_impl = read_file(ROOT_IMPL_CONFIG_PATH);
+    std::string impl = root_impl ? trim(*root_impl) : "";
+    const char* active_bin_dir = (impl == "apatch") ? AP_BIN_DIR : KSU_BIN_DIR;
+    if (ensure_binaries(active_bin_dir, true) != 0) {
         LOGW("Failed to ensure binaries");
     }
 

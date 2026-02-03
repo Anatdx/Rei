@@ -59,7 +59,10 @@ object ReidLauncher {
                 }
                 val daemonBin = if (useApd) apd else ksud
                 append("(restorecon -F '").append(dstReid).append("' '").append(daemonBin).append("' 2>/dev/null || true); ")
-                append("mkdir -p /data/adb/ksu/bin; ln -sf '").append(daemonBin).append("' /data/adb/ksu/bin/ksud; ")
+                // 统一 bin：当前后端的 bin 目录 + rei/bin 软链接到该目录
+                val backendBin = if (useApd) "/data/adb/ap/bin" else "/data/adb/ksu/bin"
+                append("mkdir -p '").append(backendBin).append("'; ln -sf '").append(daemonBin).append("' '").append(backendBin).append("/ksud'; ")
+                append("rm -f /data/adb/rei/bin; ln -sf '").append(backendBin).append("' /data/adb/rei/bin; ")
 
                 // KSU 时：让内核识别 Rei 为 manager 并允许本 UID
                 if (!useApd) {
@@ -90,10 +93,10 @@ object ReidLauncher {
             if (f.exists() && f.length() > 0L) return f
         }
 
-        // 2) Otherwise, extract from APK: lib/<abi>/<soName>
+        // 2) Otherwise, extract from APK to app's private lib folder (data/data/<pkg>/lib/<abi>/)
         val apk = context.applicationInfo.sourceDir?.takeIf { it.isNotBlank() } ?: return null
         val entryName = "lib/$abi/$soName"
-        val outDir = File(context.codeCacheDir, "reid_extract/$abi").apply { mkdirs() }
+        val outDir = File(context.getDir("lib", Context.MODE_PRIVATE), abi).apply { mkdirs() }
         val out = File(outDir, soName)
 
         if (out.exists() && out.length() > 0L) return out

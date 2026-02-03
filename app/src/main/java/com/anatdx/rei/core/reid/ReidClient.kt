@@ -112,9 +112,14 @@ object ReidClient {
 
     private fun extractFromApk(context: Context, soName: String): File? {
         val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty().ifBlank { "arm64-v8a" }
+        // Prefer system-extracted native lib
+        context.applicationInfo.nativeLibraryDir?.let { libDir ->
+            val f = File(libDir, soName)
+            if (f.exists() && f.length() > 0L) return f
+        }
         val apk = context.applicationInfo.sourceDir?.takeIf { it.isNotBlank() } ?: return null
         val entryName = "lib/$abi/$soName"
-        val outDir = File(context.codeCacheDir, "reid_extract/$abi").apply { mkdirs() }
+        val outDir = File(context.getDir("lib", Context.MODE_PRIVATE), abi).apply { mkdirs() }
         val out = File(outDir, soName)
         if (out.exists() && out.length() > 0L) return out
         return runCatching {

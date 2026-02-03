@@ -14,13 +14,18 @@ extern const char* VERSION_NAME;
 // Paths
 constexpr const char* ADB_DIR = "/data/adb/";
 constexpr const char* WORKING_DIR = "/data/adb/ksu/";
-constexpr const char* BINARY_DIR = "/data/adb/ksu/bin/";
+constexpr const char* BINARY_DIR = "/data/adb/ksu/bin/";  // legacy; use active backend or REI_BIN_DIR
 constexpr const char* LOG_DIR = "/data/adb/ksu/log/";
 
-// Binary tool paths
-constexpr const char* BUSYBOX_PATH = "/data/adb/ksu/bin/busybox";
-constexpr const char* RESETPROP_PATH = "/data/adb/ksu/bin/resetprop";
-constexpr const char* BOOTCTL_PATH = "/data/adb/ksu/bin/bootctl";
+// 统一 bin：/data/adb/rei/bin 软链接到当前 root 实现的 bin 目录，模块与命令均在此运行
+constexpr const char* REI_BIN_DIR = "/data/adb/rei/bin";
+constexpr const char* KSU_BIN_DIR = "/data/adb/ksu/bin/";
+constexpr const char* AP_BIN_DIR = "/data/adb/ap/bin/";
+
+// Binary tool paths（统一走 rei/bin，切换实现后解析到对应后端）
+constexpr const char* BUSYBOX_PATH = "/data/adb/rei/bin/busybox";
+constexpr const char* RESETPROP_PATH = "/data/adb/rei/bin/resetprop";
+constexpr const char* BOOTCTL_PATH = "/data/adb/rei/bin/bootctl";
 
 constexpr const char* PROFILE_DIR = "/data/adb/ksu/profile/";
 constexpr const char* PROFILE_SELINUX_DIR = "/data/adb/ksu/profile/selinux/";
@@ -32,8 +37,7 @@ constexpr const char* DAEMON_PATH = "/data/adb/ksud";
 constexpr const char* APD_DAEMON_PATH = "/data/adb/apd";
 // Root 实现配置：ksu = 不创建 apd 硬链接，apatch = 创建 apd
 constexpr const char* ROOT_IMPL_CONFIG_PATH = "/data/adb/ksu/root_impl";
-constexpr const char* MAGISKBOOT_PATH = "/data/adb/ksu/bin/magiskboot";
-constexpr const char* DAEMON_LINK_PATH = "/data/adb/ksu/bin/ksud";
+constexpr const char* MAGISKBOOT_PATH = "/data/adb/rei/bin/magiskboot";
 constexpr const char* REI_DIR = "/data/adb/rei";
 constexpr const char* REI_KSUD_BAK = "/data/adb/rei/ksud.bak";
 constexpr const char* REI_APD_BAK = "/data/adb/rei/apd.bak";

@@ -513,21 +513,27 @@ int install(const std::optional<std::string>& magiskboot_path) {
         LOGW("Failed to restore SELinux contexts");
     }
 
-    // Extract binary assets
-    if (!ensure_binaries(false)) {
+    // 当前活跃后端的 bin 目录，二进制解压到此，并在此创建 ksud 软链接
+    const char* active_bin_dir = (impl == "apatch") ? AP_BIN_DIR : KSU_BIN_DIR;
+    if (!ensure_dir_exists(active_bin_dir)) {
+        LOGE("Failed to create %s", active_bin_dir);
+        return 1;
+    }
+    if (ensure_binaries(active_bin_dir, false) != 0) {
         LOGW("Failed to extract binary assets");
     }
 
-    // Create symlink: /data/adb/ksu/bin/ksud -> 当前使用的二进制（reid 或 ksud/apd）
-    if (!ensure_dir_exists(BINARY_DIR)) {
-        LOGE("Failed to create %s", BINARY_DIR);
-        return 1;
+    std::string daemon_link_path = std::string(active_bin_dir) + "ksud";
+    unlink(daemon_link_path.c_str());
+    const char* link_target = (impl == "apatch") ? APD_DAEMON_PATH : DAEMON_PATH;
+    if (symlink(link_target, daemon_link_path.c_str()) != 0) {
+        LOGW("Failed to create symlink %s: %s", daemon_link_path.c_str(), strerror(errno));
     }
 
-    unlink(DAEMON_LINK_PATH);
-    const char* link_target = (impl == "apatch") ? APD_DAEMON_PATH : DAEMON_PATH;
-    if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
-        LOGW("Failed to create symlink: %s", strerror(errno));
+    // 统一 bin：/data/adb/rei/bin 软链接到当前后端 bin，模块与命令均在此运行
+    unlink(REI_BIN_DIR);
+    if (symlink(active_bin_dir, REI_BIN_DIR) != 0) {
+        LOGW("Failed to create rei bin symlink: %s", strerror(errno));
     }
     allowlist_sync_to_backend(impl);
 
@@ -579,10 +585,21 @@ int set_root_impl(const std::string& impl) {
             return 1;
         }
     }
-    unlink(DAEMON_LINK_PATH);
+    const char* active_bin_dir = (impl == "apatch") ? AP_BIN_DIR : KSU_BIN_DIR;
+    if (!ensure_dir_exists(active_bin_dir)) {
+        LOGE("Failed to create %s", active_bin_dir);
+        return 1;
+    }
+    std::string daemon_link_path = std::string(active_bin_dir) + "ksud";
+    unlink(daemon_link_path.c_str());
     const char* link_target = (impl == "apatch") ? APD_DAEMON_PATH : DAEMON_PATH;
-    if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
-        LOGW("Failed to create symlink: %s", strerror(errno));
+    if (symlink(link_target, daemon_link_path.c_str()) != 0) {
+        LOGW("Failed to create symlink %s: %s", daemon_link_path.c_str(), strerror(errno));
+        return 1;
+    }
+    unlink(REI_BIN_DIR);
+    if (symlink(active_bin_dir, REI_BIN_DIR) != 0) {
+        LOGW("Failed to create rei bin symlink: %s", strerror(errno));
     }
     allowlist_sync_to_backend(impl);
     return 0;

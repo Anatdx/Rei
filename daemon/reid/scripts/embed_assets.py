@@ -178,40 +178,10 @@ std::vector<std::string> list_supported_kmi() {
     return result;
 }
 
-int ensure_binaries(bool ignore_if_exist) {
-    if (!ensure_dir_exists(BINARY_DIR)) {
-        LOGE("Failed to create binary directory: %s", BINARY_DIR);
+int ensure_binaries(const char* bin_dir, bool ignore_if_exist) {
+    if (!ensure_dir_exists(bin_dir)) {
+        LOGE("Failed to create binary directory: %s", bin_dir);
         return 1;
-    }
-
-    // When reid exists: ksud and apd must be hard links to reid. No backup, no copy from ksud.
-    struct stat st;
-    struct stat st_other;
-    if (stat(REID_DAEMON_PATH, &st) == 0) {
-        if (stat(DAEMON_PATH, &st_other) != 0 || st_other.st_ino != st.st_ino) {
-            unlink(DAEMON_PATH);
-            if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
-                LOGW("Failed to create ksud hard link: %s", strerror(errno));
-            } else {
-                LOGI("Created ksud hard link: %s -> %s", DAEMON_PATH, REID_DAEMON_PATH);
-            }
-        }
-        if (stat(APD_DAEMON_PATH, &st_other) != 0 || st_other.st_ino != st.st_ino) {
-            unlink(APD_DAEMON_PATH);
-            if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
-                LOGW("Failed to create apd hard link: %s", strerror(errno));
-            } else {
-                LOGI("Created apd hard link: %s -> %s", APD_DAEMON_PATH, REID_DAEMON_PATH);
-            }
-        }
-        if (stat(DAEMON_LINK_PATH, &st_other) != 0) {
-            unlink(DAEMON_LINK_PATH);
-            if (symlink(DAEMON_PATH, DAEMON_LINK_PATH) != 0) {
-                LOGW("Failed to create ksud symlink: %s", strerror(errno));
-            } else {
-                LOGI("Created ksud symlink: %s -> %s", DAEMON_LINK_PATH, DAEMON_PATH);
-            }
-        }
     }
     
     for (const auto& name : list_assets()) {
@@ -220,7 +190,7 @@ int ensure_binaries(bool ignore_if_exist) {
             continue;
         }
         
-        std::string dest = std::string(BINARY_DIR) + name;
+        std::string dest = std::string(bin_dir) + name;
         
         if (ignore_if_exist) {
             struct stat st_file;
