@@ -3,7 +3,9 @@ package com.anatdx.rei
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.edit
+import androidx.core.os.LocaleListCompat
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import io.murasaki.Murasaki
 
@@ -32,14 +34,22 @@ class ReiApplication : Application() {
                 }
             }
 
-        /** Root 实现：ksu = 仅 KernelSU（不创建 apd 硬链接），apatch = KernelPatch/APatch（创建 apd）。 */
+        /** Root impl: ksu = KernelSU only (no apd link), apatch = KernelPatch/APatch (create apd). */
         var rootImplementation: String
             get() = sharedPreferences.getString(KEY_ROOT_IMPL, VALUE_ROOT_IMPL_APATCH) ?: VALUE_ROOT_IMPL_APATCH
             set(value) {
                 sharedPreferences.edit { putString(KEY_ROOT_IMPL, value) }
             }
 
+        /** App language: empty = system, or BCP 47 tag (e.g. zh, zh-TW, en, ja, fr, ru, ko, es). */
+        var appLanguage: String
+            get() = sharedPreferences.getString(KEY_APP_LANG, "") ?: ""
+            set(value) {
+                sharedPreferences.edit { putString(KEY_APP_LANG, value) }
+            }
+
         const val KEY_ROOT_IMPL = "root_impl"
+        const val KEY_APP_LANG = "app_lang"
         const val VALUE_ROOT_IMPL_KSU = "ksu"
         const val VALUE_ROOT_IMPL_APATCH = "apatch"
     }
@@ -50,7 +60,17 @@ class ReiApplication : Application() {
         sharedPreferences = getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
         ReiKeyHelper.setSharedPreferences(this, SP_NAME)
         superKey = ReiKeyHelper.readSuperKey()
-        // 初始化 Murasaki：直连 ksud 或通过 Zygisk 桥接（murasaki-zygisk-bridge）获取 Binder
+        applyAppLanguage()
+        // Init Murasaki: direct ksud or Zygisk bridge for Binder
         Thread { Murasaki.init(packageName) }.start()
+    }
+
+    private fun applyAppLanguage() {
+        val tag = appLanguage.trim()
+        if (tag.isEmpty()) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+        } else {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+        }
     }
 }

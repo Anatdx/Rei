@@ -41,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.anatdx.rei.R
 import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -110,7 +112,7 @@ private suspend fun runKpimgInfo(context: android.content.Context): KpimgResult 
             }.getOrElse { false }
         }
         if (!kpimgOk || !kpimgFile.exists()) {
-            return@withContext KpimgResult.Err("无法获取 kpimg（assets 或 APK 内均无）")
+            return@withContext KpimgResult.Err(context.getString(R.string.patches_error_no_kpimg))
         }
         val libDir = java.io.File(context.applicationInfo.nativeLibraryDir)
         val libKptools = java.io.File(libDir, "libkptools.so")
@@ -131,7 +133,7 @@ private suspend fun runKpimgInfo(context: android.content.Context): KpimgResult 
             }.getOrElse { false }
         }
         if (!kptoolsOk || !kptoolsFile.exists()) {
-            return@withContext KpimgResult.Err("未找到 kptools/libkptools.so（请确保 APK 内已打包或构建时已执行 downloadKptools）")
+            return@withContext KpimgResult.Err(context.getString(R.string.patches_error_no_kptools))
         }
         val patchPath = patchDir.absolutePath
         val cmd = "cd $patchPath && chmod 700 kptools kpimg && LD_LIBRARY_PATH=$patchPath ./kptools -l -k kpimg"
@@ -139,7 +141,7 @@ private suspend fun runKpimgInfo(context: android.content.Context): KpimgResult 
         if (result.exitCode != 0) {
             return@withContext KpimgResult.Err("exit=${result.exitCode}\n${result.output}")
         }
-        KpimgResult.Ok(result.output.ifBlank { "(无输出)" })
+        KpimgResult.Ok(result.output.ifBlank { context.getString(R.string.patches_no_output) })
     }
 
 @Composable
@@ -159,7 +161,7 @@ fun PatchesScreen(
 
     fun doRefresh() {
         if (!rootGranted) {
-            error = "需要 Root 权限"
+            error = ctx.getString(R.string.patches_error_need_root)
         } else {
             loading = true
             error = null
@@ -186,12 +188,12 @@ fun PatchesScreen(
         ReiCard {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "KernelPatch 修补",
+                    text = stringResource(R.string.patches_kp_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "构建时已打包 kpimg 与 kptools；完整 boot 修补流程（含 magiskboot 等）建议使用 IcePatch。此处可查看当前打包的 kpimg 信息。",
+                    text = stringResource(R.string.patches_kp_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -203,7 +205,7 @@ fun PatchesScreen(
         ReiCard {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "查看 kpimg 信息",
+                    text = stringResource(R.string.patches_view_kpimg),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -216,7 +218,7 @@ fun PatchesScreen(
                             modifier = Modifier.height(20.dp).fillMaxWidth(0.3f),
                         )
                     } else {
-                        Text("运行 kptools -l -k kpimg")
+                        Text(stringResource(R.string.patches_run_kptools))
                     }
                 }
                 error?.let { msg ->
@@ -233,23 +235,23 @@ fun PatchesScreen(
                         Spacer(Modifier.height(12.dp))
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "kpimg 信息",
+                                text = stringResource(R.string.patches_kpimg_info),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             Spacer(Modifier.height(4.dp))
                             ListItem(
-                                headlineContent = { Text("版本") },
+                                headlineContent = { Text(stringResource(R.string.patches_version)) },
                                 supportingContent = { Text(parsed.version) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             )
                             ListItem(
-                                headlineContent = { Text("编译时间") },
+                                headlineContent = { Text(stringResource(R.string.patches_compile_time)) },
                                 supportingContent = { Text(parsed.compileTime) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             )
                             ListItem(
-                                headlineContent = { Text("配置") },
+                                headlineContent = { Text(stringResource(R.string.patches_config)) },
                                 supportingContent = { Text(parsed.config) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             )
@@ -278,12 +280,12 @@ private fun SuperKeyInputCard() {
     ReiCard {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "设置超级密钥",
+                text = stringResource(R.string.patches_superkey_title),
                 style = MaterialTheme.typography.titleSmall,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "修补时设置的超级密钥将自动保存，下次无需重新输入。8–63 位，需含字母和数字。",
+                text = stringResource(R.string.patches_superkey_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -298,7 +300,7 @@ private fun SuperKeyInputCard() {
                         input = it
                         validationError = when {
                             it.isEmpty() -> null
-                            !ReiKeyHelper.isValidSuperKey(it) -> "需 8–63 位且含字母和数字"
+                            !ReiKeyHelper.isValidSuperKey(it) -> ""
                             else -> null
                         }
                         if (ReiKeyHelper.isValidSuperKey(it)) {
@@ -306,17 +308,17 @@ private fun SuperKeyInputCard() {
                             ReiKeyHelper.writeSuperKey(it)
                         }
                     },
-                    label = { Text("超级密钥") },
-                    placeholder = { Text("输入后自动保存") },
+                    label = { Text(stringResource(R.string.patches_superkey_label)) },
+                    placeholder = { Text(stringResource(R.string.patches_superkey_placeholder)) },
                     visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.weight(1f),
                     isError = validationError != null,
-                    supportingText = validationError?.let { { Text(it) } },
+                    supportingText = validationError?.let { { Text(stringResource(R.string.patches_superkey_validation)) } },
                 )
                 Icon(
                     imageVector = if (keyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = if (keyVisible) "隐藏" else "显示",
+                    contentDescription = if (keyVisible) stringResource(R.string.settings_visibility_hide) else stringResource(R.string.settings_visibility_show),
                     modifier = Modifier
                         .size(24.dp)
                         .padding(start = 8.dp)
@@ -326,7 +328,7 @@ private fun SuperKeyInputCard() {
             if (ReiApplication.superKey.isNotEmpty() && ReiKeyHelper.isValidSuperKey(ReiApplication.superKey)) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "已自动保存",
+                    text = stringResource(R.string.patches_auto_saved),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

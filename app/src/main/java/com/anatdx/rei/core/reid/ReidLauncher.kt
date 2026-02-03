@@ -34,7 +34,7 @@ object ReidLauncher {
             val installCmd = buildString {
                 fun esc(s: String) = s.replace("'", "'\\''")
 
-                // cwd 固定到 /data/adb，避免 su 把 cwd 设为 /data/adb/ksud 时 ln -f 在该目录下产生临时文件（如 apd_xxxxxx）
+                // cwd /data/adb to avoid ln -f creating temp files under ksud dir
                 append("set -e; cd /data/adb || exit 1; ")
                 append("mkdir -p /data/adb; ")
 
@@ -47,11 +47,11 @@ object ReidLauncher {
                 append("mv -f '${dstReid}.new' \"\$DST_REID\"; ")
                 append("fi; ")
 
-                // ksud/apd 二选一：不活跃的移到 /data/adb/rei/*.bak，切换时移回，避免 rm 丢 root
+                // ksud/apd: move inactive to rei/*.bak, restore on switch
                 val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
                 val reiDir = "/data/adb/rei"
                 append("mkdir -p '").append(reiDir).append("'; ")
-                // 用 ln 到 .new 再 mv 覆盖，代替 ln -f，避免 ln -f 在 /data/adb 下产生 apd_* / ksud_* 临时文件；且不先删 apd/ksud 否则 su 会废
+                // ln to .new then mv to avoid ln -f temp files; do not remove apd/ksud first
                 if (useApd) {
                     append("[ -f '").append(ksud).append("' ] && mv -f '").append(ksud).append("' '").append(reiDir).append("/ksud.bak'; ")
                     append("[ -f '").append(reiDir).append("/apd.bak' ] && mv -f '").append(reiDir).append("/apd.bak' '").append(apd).append("' || (ln '").append(dstReid).append("' '").append(apd).append(".new' && mv -f '").append(apd).append(".new' '").append(apd).append("'); ")
@@ -61,12 +61,12 @@ object ReidLauncher {
                 }
                 val daemonBin = if (useApd) apd else ksud
                 append("(restorecon -F '").append(dstReid).append("' '").append(daemonBin).append("' 2>/dev/null || true); ")
-                // 统一 bin：当前后端的 bin 目录 + rei/bin 软链接到该目录
+                // Single bin: backend bin dir + rei/bin symlink
                 val backendBin = if (useApd) "/data/adb/ap/bin" else "/data/adb/ksu/bin"
                 append("mkdir -p '").append(backendBin).append("'; ln -sf '").append(daemonBin).append("' '").append(backendBin).append("/ksud'; ")
                 append("rm -f /data/adb/rei/bin; ln -sf '").append(backendBin).append("' /data/adb/rei/bin; ")
 
-                // KSU 时：让内核识别 Rei 为 manager 并允许本 UID
+                // KSU: register Rei as manager and allow this UID
                 if (!useApd) {
                     append("('").append(ksud).append("' debug set-manager '").append(esc(pkg)).append("' >/dev/null 2>&1 || true); ")
                     append("('").append(ksud).append("' profile set-allow '").append(uid).append("' '").append(esc(pkg)).append("' 1 >/dev/null 2>&1 || true); ")

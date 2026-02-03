@@ -269,7 +269,7 @@ val kernelPatchVersionFallback: String = (rootProject.findProperty("kernelPatchV
 val kernelPatchReleasesUrl = "https://api.github.com/repos/bmax121/KernelPatch/releases/latest"
 val kernelPatchBaseUrl = "https://github.com/bmax121/KernelPatch/releases/download"
 
-/** 从 GitHub API 获取最新 release 的 tag_name，失败时返回 null */
+/** Fetch latest release tag_name from GitHub API; returns null on failure. */
 fun fetchLatestKernelPatchTag(): String? = runCatching {
     val conn = URI.create(kernelPatchReleasesUrl).toURL().openConnection()
     conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
@@ -315,7 +315,7 @@ fun registerDownloadTask(
     }
 }
 
-/** 使用「先解析最新 release 版本再下载」的 KP 资源任务 */
+/** KP resource task: resolve latest release then download. */
 fun registerKernelPatchDownloadTask(
     taskName: String,
     assetName: String,
@@ -328,7 +328,7 @@ fun registerKernelPatchDownloadTask(
         outputs.file(destFile)
         doLast {
             val tag = versionFile.readText().trim().ifBlank { kernelPatchVersionFallback }
-            val tagForUrl = tag.removePrefix("v")  // 链接里用纯版本号，如 0.13.0
+            val tagForUrl = tag.removePrefix("v")  // version for URL (e.g. 0.13.0)
             val srcUrl = "$kernelPatchBaseUrl/$tagForUrl/$assetName"
             destFile.parentFile?.mkdirs()
             if (!destFile.exists() || isFileUpdated(srcUrl, destFile)) {
@@ -440,6 +440,7 @@ dependencies {
     implementation("com.github.topjohnwu.libsu:io:6.0.0")
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

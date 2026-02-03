@@ -1,61 +1,61 @@
 <resources>
     <string name="app_name">Rei</string>
-    <string name="nav_home">Home</string>
-    <string name="nav_modules">Modules</string>
-    <string name="nav_app_access">Access</string>
-    <string name="nav_settings">Settings</string>
+    <string name="nav_home">홈</string>
+    <string name="nav_modules">모듈</string>
+    <string name="nav_app_access">접근</string>
+    <string name="nav_settings">설정</string>
 
-    <string name="title_home">Overview</string>
-    <string name="title_modules">Modules</string>
-    <string name="title_logs">Logs</string>
-    <string name="title_settings">Settings</string>
-    <string name="title_app_access">App Access</string>
-    <string name="title_boot_tools">Boot Tools</string>
-    <string name="title_partition_manager">Partition Manager</string>
+    <string name="title_home">개요</string>
+    <string name="title_modules">모듈</string>
+    <string name="title_logs">로그</string>
+    <string name="title_settings">설정</string>
+    <string name="title_app_access">앱 접근</string>
+    <string name="title_boot_tools">Boot 도구</string>
+    <string name="title_partition_manager">파티션 관리</string>
 
     <!-- Home -->
-    <string name="home_system_status">System Status</string>
-    <string name="home_device">Device</string>
-    <string name="home_root_granted">Root: Granted</string>
-    <string name="home_root_denied">Root: Denied</string>
-    <string name="home_root_requesting">Checking su…</string>
-    <string name="home_root_ignored">Su check not run</string>
+    <string name="home_system_status">시스템 상태</string>
+    <string name="home_device">기기</string>
+    <string name="home_root_granted">Root: 허용됨</string>
+    <string name="home_root_denied">Root: 거부됨</string>
+    <string name="home_root_requesting">su 확인 중…</string>
+    <string name="home_root_ignored">su 확인 미실행</string>
     <string name="home_root_impl_ksu">Root · KernelSU</string>
     <string name="home_root_impl_kp">Root · KernelPatch</string>
-    <string name="home_kp_installed">Installed · %s</string>
-    <string name="home_kp_installed_short">Installed</string>
-    <string name="home_kp_not_installed">Not installed or not authenticated</string>
+    <string name="home_kp_installed">설치됨 · %s</string>
+    <string name="home_kp_installed_short">설치됨</string>
+    <string name="home_kp_not_installed">미설치 또는 미인증</string>
     <string name="home_kernel">Kernel</string>
-    <string name="home_superkey">Super Key</string>
-    <string name="home_superkey_hint">If you have KP backend installed, enter the super key for access. 8–63 chars, letters and digits. Set and save in Settings.</string>
-    <string name="home_go_settings">Settings</string>
-    <string name="home_superkey_set_not_ready">SuperKey set but KP backend not ready</string>
-    <string name="home_superkey_check_kp">Confirm KernelPatch/APatch kernel is flashed, or check SuperKey matches device.</string>
-    <string name="home_set_superkey">Set SuperKey</string>
-    <string name="home_quick_actions">Quick Actions</string>
-    <string name="home_quick_actions_desc">Refresh / Tools</string>
-    <string name="home_redetect_root">Redetect Root</string>
-    <string name="home_redetect_root_desc">Re-request access and refresh status</string>
-    <string name="home_partition_manager">Partition Manager</string>
-    <string name="home_partition_manager_desc">View, backup, flash partitions; manage A/B slots</string>
+    <string name="home_superkey">슈퍼 키</string>
+    <string name="home_superkey_hint">KP 백엔드가 설치된 경우 액세스를 위해 슈퍼 키를 입력하세요. 8–63자, 영숫자. 설정에서 저장.</string>
+    <string name="home_go_settings">설정</string>
+    <string name="home_superkey_set_not_ready">SuperKey 설정됐으나 KP 백엔드 미준비</string>
+    <string name="home_superkey_check_kp">KernelPatch/APatch 커널이 플래시되었는지 확인하거나 SuperKey가 기기와 일치하는지 확인하세요.</string>
+    <string name="home_set_superkey">SuperKey 설정</string>
+    <string name="home_quick_actions">빠른 작업</string>
+    <string name="home_quick_actions_desc">새로고침 / 도구</string>
+    <string name="home_redetect_root">Root 재감지</string>
+    <string name="home_redetect_root_desc">액세스 재요청 및 상태 새로고침</string>
+    <string name="home_partition_manager">파티션 관리</string>
+    <string name="home_partition_manager_desc">파티션 보기, 백업, 플래시; A/B 슬롯 관리</string>
 
     <!-- Logs -->
-    <string name="logs_filter_all">All</string>
-    <string name="logs_filter_info">Info</string>
-    <string name="logs_filter_warning">Warning</string>
-    <string name="logs_filter_error">Error</string>
-    <string name="logs_title">Logs</string>
-    <string name="logs_empty">No logs</string>
-    <string name="logs_count">%1$d lines (max 3000)</string>
-    <string name="logs_share">Share logs</string>
-    <string name="logs_filter_current">Filter: %s</string>
+    <string name="logs_filter_all">전체</string>
+    <string name="logs_filter_info">정보</string>
+    <string name="logs_filter_warning">경고</string>
+    <string name="logs_filter_error">오류</string>
+    <string name="logs_title">로그</string>
+    <string name="logs_empty">로그 없음</string>
+    <string name="logs_count">%1$d줄 (최대 3000)</string>
+    <string name="logs_share">로그 공유</string>
+    <string name="logs_filter_current">필터: %s</string>
 
     <!-- Settings -->
-    <string name="settings_appearance">Appearance</string>
-    <string name="settings_appearance_desc">Theme / Dynamic color / Accent</string>
-    <string name="settings_theme_system">Follow system</string>
-    <string name="settings_theme_light">Light</string>
-    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_appearance">디자인</string>
+    <string name="settings_appearance_desc">테마 / 동적 색상 / 강조</string>
+    <string name="settings_theme_system">시스템 따르기</string>
+    <string name="settings_theme_light">라이트</string>
+    <string name="settings_theme_dark">다크</string>
     <string name="settings_dynamic_color">Dynamic color (Android 12+)</string>
     <string name="settings_dynamic_color_desc">Follow system wallpaper when on (accent preset disabled)</string>
     <string name="settings_preset_ice_blue">Ice Blue</string>
@@ -90,9 +90,9 @@
     <string name="settings_kp_patch_desc">KernelPatch kpimg info / patch entry</string>
     <string name="settings_about">About</string>
     <string name="settings_about_desc">Rei · Multi-backend root manager</string>
-    <string name="settings_language">Language</string>
-    <string name="settings_language_desc">App display language</string>
-    <string name="language_system">Follow system</string>
+    <string name="settings_language">언어</string>
+    <string name="settings_language_desc">앱 표시 언어</string>
+    <string name="language_system">시스템 따르기</string>
     <string name="language_zh">简体中文</string>
     <string name="language_zh_tw">繁體中文</string>
     <string name="language_en">English</string>
@@ -206,9 +206,9 @@
     <string name="app_access_error_packages">Failed to read device app list</string>
 
     <!-- Boot Tools -->
-    <string name="boot_tools_kp_install_title">KP/APatch installation</string>
-    <string name="boot_tools_kp_install_desc">Prep: unlock BL, check CONFIG_KALLSYMS (zcat /proc/config.gz), backup stock boot.img. Patch: use APatch manager or IcePatch to patch boot. Flash: fastboot flash boot &lt;patched.img&gt; or REC direct flash. Uninstall: flash back stock boot. ARM64 only; Android kernel 3.18–6.6.</string>
-    <string name="boot_tools_kp_install_link">View full guide (APatch)</string>
+    <string name="boot_tools_kp_install_title">KP/APatch 설치</string>
+    <string name="boot_tools_kp_install_desc">준비: BL 잠금 해제, CONFIG_KALLSYMS 확인(zcat /proc/config.gz), 스톡 boot.img 백업. 패치: APatch 매니저 또는 IcePatch로 boot 패치. 플래시: fastboot flash boot 또는 REC 직접 플래시. 제거: 스톡 boot 플래시. ARM64만; Android 커널 3.18–6.6.</string>
+    <string name="boot_tools_kp_install_link">전체 가이드 보기 (APatch)</string>
     <string name="boot_tools_title">Boot tools</string>
     <string name="boot_tools_has_root">Root granted; reid commands available</string>
     <string name="boot_tools_no_root">No root (this page requires root)</string>

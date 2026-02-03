@@ -30,8 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.anatdx.rei.R
 import com.anatdx.rei.core.log.ReiLog
 import com.anatdx.rei.core.log.ReiLogLevel
 import com.anatdx.rei.ui.components.ReiCard
@@ -43,7 +45,7 @@ import kotlinx.coroutines.withContext
 fun LogsScreen() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var filter by remember { mutableStateOf("全部") }
+    var filter by remember { mutableStateOf("all") }
     var lines by remember { mutableStateOf<List<String>>(emptyList()) }
 
     suspend fun refresh() {
@@ -55,9 +57,10 @@ fun LogsScreen() {
     val filtered = remember(lines, filter) {
         lines.filter { line ->
             when (filter) {
-                "信息" -> line.contains("[I]")
-                "警告" -> line.contains("[W]")
-                "错误" -> line.contains("[E]")
+                "all" -> line.contains("[I]") || line.contains("[W]") || line.contains("[E]")
+                "info" -> line.contains("[I]")
+                "warning" -> line.contains("[W]")
+                "error" -> line.contains("[E]")
                 else -> true
             }
         }
@@ -72,11 +75,11 @@ fun LogsScreen() {
             item {
                 ReiCard {
                     ListItem(
-                        headlineContent = { Text("日志") },
+                        headlineContent = { Text(stringResource(R.string.logs_title)) },
                         supportingContent = {
                             Text(
-                                if (lines.isEmpty()) "暂无日志"
-                                else "共 ${lines.size} 行（仅显示最近 3000 行）"
+                                if (lines.isEmpty()) stringResource(R.string.logs_empty)
+                                else stringResource(R.string.logs_count, lines.size)
                             )
                         },
                         leadingContent = { Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = null) },
@@ -108,7 +111,7 @@ fun LogsScreen() {
                                         putExtra(Intent.EXTRA_STREAM, uri)
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    ctx.startActivity(Intent.createChooser(intent, "分享日志"))
+                                    ctx.startActivity(Intent.createChooser(intent, ctx.getString(R.string.logs_share)))
                                 },
                             ) { Icon(Icons.Outlined.Share, contentDescription = null) }
                         }
@@ -121,16 +124,18 @@ fun LogsScreen() {
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf("全部", "信息", "警告", "错误").forEach { label ->
+                    listOf("all" to R.string.logs_filter_all, "info" to R.string.logs_filter_info, "warning" to R.string.logs_filter_warning, "error" to R.string.logs_filter_error).forEach { (key, res) ->
                         FilterChip(
-                            selected = filter == label,
-                            onClick = { filter = label },
-                            label = { Text(label) },
+                            selected = filter == key,
+                            onClick = { filter = key },
+                            label = { Text(stringResource(res)) },
                         )
                     }
                 }
                 Text(
-                    text = "当前筛选：$filter",
+                    text = stringResource(R.string.logs_filter_current, stringResource(
+                        when (filter) { "all" -> R.string.logs_filter_all; "info" -> R.string.logs_filter_info; "warning" -> R.string.logs_filter_warning; "error" -> R.string.logs_filter_error; else -> R.string.logs_filter_all }
+                    )),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -258,7 +258,7 @@ fun PartitionManagerScreen(navController: NavController) {
                     ReiCard {
                         Column(modifier = Modifier.padding(vertical = 8.dp)) {
                             ListItem(
-                                headlineContent = { Text("分区列表") },
+                                headlineContent = { Text(stringResource(R.string.partition_list)) },
                                 supportingContent = { Text(stringResource(R.string.partition_filter_all) + " / " + stringResource(R.string.partition_filter_physical) + " / " + stringResource(R.string.partition_filter_logical)) },
                                 leadingContent = { Icon(Icons.Default.Storage, contentDescription = null) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),

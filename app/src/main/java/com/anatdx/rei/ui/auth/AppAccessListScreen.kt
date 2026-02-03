@@ -43,8 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.anatdx.rei.ApNatives
+import com.anatdx.rei.R
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.reid.ReidExecResult
@@ -124,7 +126,7 @@ fun AppAccessListScreen() {
 
         scope.launch {
             pending = pending - key
-            // 优先：ksud profile set-allow；其次：apd allowlist grant/revoke；备用：JNI ApNatives
+            // Prefer ksud profile set-allow; then apd allowlist grant/revoke; fallback JNI ApNatives
             var result = runCatching {
                 ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, if (to) "1" else "0"), timeoutMs = 10_000L)
             }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
@@ -150,7 +152,7 @@ fun AppAccessListScreen() {
                 }
                 apps = reverted
                 updateStatsFrom(reverted)
-                lastError = result.output.ifBlank { "授权操作失败 (exit=${result.exitCode})" }.take(200)
+                lastError = result.output.ifBlank { ctx.getString(R.string.app_access_auth_failed, result.exitCode) }.take(200)
             } else {
                 lastError = null
                 refresh()
@@ -171,11 +173,11 @@ fun AppAccessListScreen() {
             item {
                 ReiCard {
                 ListItem(
-                    headlineContent = { Text("应用授权列表") },
+                    headlineContent = { Text(stringResource(R.string.app_access_list_title)) },
                     supportingContent = {
                         Text(
-                            if (loading) "正在读取应用列表…"
-                            else "可见 ${filtered.size}/${apps.size}（可见已授权 $visibleGranted；allowlist=${stats.allowlistCount}）"
+                            if (loading) stringResource(R.string.app_access_loading)
+                            else stringResource(R.string.app_access_visible_stats, filtered.size, apps.size, visibleGranted, stats.allowlistCount)
                         )
                     },
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
@@ -194,7 +196,7 @@ fun AppAccessListScreen() {
                         value = search,
                         onValueChange = { search = it },
                         singleLine = true,
-                        label = { Text("搜索（名称 / 包名）") },
+                        label = { Text(stringResource(R.string.app_access_search_hint)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
@@ -205,7 +207,7 @@ fun AppAccessListScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "显示系统应用",
+                            text = stringResource(R.string.app_access_show_system),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f),
@@ -228,7 +230,7 @@ fun AppAccessListScreen() {
                     headlineContent = { Text(app.packageName) },
                     supportingContent = {
                         Text(
-                            if (app.isSystem) "系统应用 · uid=${app.uid}" else "用户应用 · uid=${app.uid}"
+                            if (app.isSystem) stringResource(R.string.app_access_system_app, app.uid) else stringResource(R.string.app_access_user_app, app.uid)
                         )
                     },
                     leadingContent = { AppIcon(pkg = app.packageName) },
@@ -252,7 +254,7 @@ fun AppAccessListScreen() {
     }
 }
 
-/** 解析 ksud profile allowlist 输出的 JSON 数组 [ uid, ... ] */
+/** Parse ksud profile allowlist JSON array [ uid, ... ]. */
 private fun parseProfileAllowlistJson(output: String): Set<Int> {
     return output
         .replace("[", " ")
@@ -277,10 +279,10 @@ private data class ManagerViewResult(
 private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
     val pkgs = queryInstalledPackages(ctx)
     if (pkgs.isEmpty()) {
-        return ManagerViewResult(entries = emptyList(), stats = AuthStats(), error = "未能读取本机应用列表")
+        return ManagerViewResult(entries = emptyList(), stats = AuthStats(), error = ctx.getString(R.string.app_access_error_packages))
     }
 
-    // 优先：ksud profile allowlist；其次：apd allowlist get；备用：JNI ApNatives.suUids
+    // Prefer ksud profile allowlist; then apd allowlist get; fallback JNI ApNatives.suUids
     var allow = emptySet<Int>()
     var allowError: String? = null
     val profileResult = runCatching {

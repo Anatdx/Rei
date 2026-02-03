@@ -1,5 +1,6 @@
 package com.anatdx.rei.ui.tools
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -30,6 +33,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,8 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.anatdx.rei.R
 import com.anatdx.rei.core.io.UriFiles
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
@@ -138,11 +144,11 @@ fun BootToolsScreen(
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("Boot 工具") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_title)) },
                 supportingContent = {
                     Text(
-                        if (canUseRoot()) "已获取 Root，可执行 reid 命令"
-                        else "未获取 Root（该页操作需要 Root）"
+                        if (canUseRoot()) stringResource(R.string.boot_tools_has_root)
+                        else stringResource(R.string.boot_tools_no_root)
                     )
                 },
                 leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
@@ -152,7 +158,34 @@ fun BootToolsScreen(
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("读取 boot 信息") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_kp_install_title)) },
+                supportingContent = { Text(stringResource(R.string.boot_tools_kp_install_desc)) },
+                leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = {
+                        ctx.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://apatch.dev/install.html")),
+                        )
+                    },
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.boot_tools_kp_install_link))
+                }
+            }
+        }
+
+        ReiCard {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.boot_tools_read_boot_info)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 modifier = Modifier.padding(vertical = 4.dp),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -167,27 +200,27 @@ fun BootToolsScreen(
                     enabled = canUseRoot() && !running,
                     onClick = { scope.launch { runReid(listOf("boot-info", "current-kmi")) } },
                 ) {
-                    Text("current-kmi")
+                    Text(stringResource(R.string.boot_tools_current_kmi))
                 }
                 androidx.compose.material3.OutlinedButton(
                     enabled = canUseRoot() && !running,
                     onClick = { scope.launch { runReid(listOf("boot-info", "slot-suffix")) } },
                 ) {
-                    Text("slot-suffix")
+                    Text(stringResource(R.string.boot_tools_slot_suffix))
                 }
                 androidx.compose.material3.OutlinedButton(
                     enabled = canUseRoot() && !running,
                     onClick = { scope.launch { runReid(listOf("boot-info", "default-partition")) } },
                 ) {
-                    Text("default")
+                    Text(stringResource(R.string.boot_tools_default))
                 }
             }
         }
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("分区管理") },
-                supportingContent = { Text("查看 / 备份 / 刷写分区，管理 A/B 槽位") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_partition_mgmt)) },
+                supportingContent = { Text(stringResource(R.string.boot_tools_partition_mgmt_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenPartitionManager),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -196,7 +229,7 @@ fun BootToolsScreen(
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("分区列表（命令行）") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_partition_list_cli)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -210,20 +243,20 @@ fun BootToolsScreen(
                     enabled = canUseRoot() && !running,
                     onClick = { scope.launch { runReid(listOf("flash", "list")) } },
                 ) {
-                    Text("list")
+                    Text(stringResource(R.string.boot_tools_list))
                 }
                 androidx.compose.material3.OutlinedButton(
                     enabled = canUseRoot() && !running,
                     onClick = { scope.launch { runReid(listOf("flash", "list", "--all")) } },
                 ) {
-                    Text("list --all")
+                    Text(stringResource(R.string.boot_tools_list_all))
                 }
             }
         }
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("刷入镜像") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_flash_image)) },
                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -232,7 +265,7 @@ fun BootToolsScreen(
                     OutlinedTextField(
                         value = imageLabel.ifBlank { "" },
                         onValueChange = {},
-                        label = { Text(if (imageLabel.isBlank()) "未选择镜像" else "镜像") },
+                        label = { Text(if (imageLabel.isBlank()) stringResource(R.string.boot_tools_no_image) else stringResource(R.string.boot_tools_image)) },
                         enabled = canUseRoot() && !running,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -261,7 +294,7 @@ fun BootToolsScreen(
                 OutlinedTextField(
                     value = partition,
                     onValueChange = { partition = it },
-                    label = { Text("分区名（默认 boot）") },
+                    label = { Text(stringResource(R.string.boot_tools_partition_name)) },
                     enabled = canUseRoot() && !running,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -271,7 +304,7 @@ fun BootToolsScreen(
                 OutlinedTextField(
                     value = slot,
                     onValueChange = { slot = it },
-                    label = { Text("Slot（可选：a / b / _a / _b）") },
+                    label = { Text(stringResource(R.string.boot_tools_slot_hint)) },
                     enabled = canUseRoot() && !running,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -283,15 +316,15 @@ fun BootToolsScreen(
                     onClick = { showFlashConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("开始刷入（需要确认）")
+                    Text(stringResource(R.string.boot_tools_flash_confirm_btn))
                 }
             }
         }
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("刷入 AK3") },
-                supportingContent = { Text("AnyKernel3 zip") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_flash_ak3)) },
+                supportingContent = { Text(stringResource(R.string.boot_tools_ak3_desc)) },
                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -300,7 +333,7 @@ fun BootToolsScreen(
                     OutlinedTextField(
                         value = ak3Label.ifBlank { "" },
                         onValueChange = {},
-                        label = { Text(if (ak3Label.isBlank()) "未选择 zip" else "zip") },
+                        label = { Text(if (ak3Label.isBlank()) stringResource(R.string.boot_tools_no_zip) else stringResource(R.string.boot_tools_zip)) },
                         enabled = canUseRoot() && !running,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -328,18 +361,18 @@ fun BootToolsScreen(
                     enabled = canUseRoot() && !running && ak3Path.isNotBlank(),
                     onClick = { showAk3Confirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("开始刷入（需要确认）") }
+                ) { Text(stringResource(R.string.boot_tools_flash_confirm_btn)) }
             }
         }
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("安装 LKM") },
-                supportingContent = { Text("KernelSU LKM (.ko)") },
+                headlineContent = { Text(stringResource(R.string.boot_tools_install_lkm)) },
+                supportingContent = { Text(stringResource(R.string.boot_tools_lkm_desc)) },
                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                 trailingContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("优先", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.boot_tools_priority), style = MaterialTheme.typography.labelMedium)
                         Spacer(Modifier.width(6.dp))
                         Switch(
                             checked = lkmPriority,
@@ -355,7 +388,7 @@ fun BootToolsScreen(
                     OutlinedTextField(
                         value = lkmLabel.ifBlank { "" },
                         onValueChange = {},
-                        label = { Text(if (lkmLabel.isBlank()) "未选择 .ko" else ".ko") },
+                        label = { Text(if (lkmLabel.isBlank()) stringResource(R.string.boot_tools_no_ko) else stringResource(R.string.boot_tools_ko)) },
                         enabled = canUseRoot() && !running,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -382,7 +415,7 @@ fun BootToolsScreen(
                 OutlinedTextField(
                     value = lkmPartition,
                     onValueChange = { lkmPartition = it },
-                    label = { Text("分区名（默认 boot）") },
+                    label = { Text(stringResource(R.string.boot_tools_partition_name)) },
                     enabled = canUseRoot() && !running,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -393,7 +426,7 @@ fun BootToolsScreen(
                     enabled = canUseRoot() && !running && lkmPath.isNotBlank(),
                     onClick = { showLkmConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("开始安装（需要确认）") }
+                ) { Text(stringResource(R.string.boot_tools_install_confirm_btn)) }
             }
         }
 
@@ -467,9 +500,9 @@ fun BootToolsScreen(
     if (showOutput && lastOutput != null) {
         AlertDialog(
             onDismissRequest = { showOutput = false },
-            title = { Text("reid 输出") },
+            title = { Text(stringResource(R.string.boot_tools_reid_output)) },
             text = { Text(lastOutput ?: "") },
-            confirmButton = { Button(onClick = { showOutput = false }) { Text("关闭") } },
+            confirmButton = { Button(onClick = { showOutput = false }) { Text(stringResource(R.string.boot_tools_close)) } },
         )
     }
 }
@@ -482,15 +515,15 @@ private fun FlashConfirmDialog(
     var token by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("确认刷写") },
+        title = { Text(stringResource(R.string.boot_tools_flash_confirm_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("此操作会直接写入分区，存在变砖风险。")
-                Text("请输入 FLASH 以继续。", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.boot_tools_flash_confirm_warning))
+                Text(stringResource(R.string.boot_tools_flash_confirm_type), color = MaterialTheme.colorScheme.error)
                 OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },
-                    label = { Text("输入 FLASH") },
+                    label = { Text(stringResource(R.string.boot_tools_flash_confirm_input)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -500,9 +533,9 @@ private fun FlashConfirmDialog(
             Button(
                 onClick = onConfirm,
                 enabled = token == "FLASH",
-            ) { Text("继续") }
+            ) { Text(stringResource(R.string.boot_tools_continue)) }
         },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.boot_tools_cancel)) } },
     )
 }
 

@@ -44,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.anatdx.rei.R
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.anatdx.rei.core.io.UriFiles
@@ -145,16 +147,17 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
             item { Spacer(Modifier.height(4.dp)) }
 
             item {
-                ReiCard {
+                    ReiCard {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         ListItem(
-                            headlineContent = { Text("模块") },
+                            headlineContent = { Text(stringResource(R.string.modules_title)) },
                             supportingContent = {
                                 Text(
                                     if (canUseRoot()) {
-                                        if (loading) "正在读取模块列表…" else "已加载 ${modules.size} 个模块"
+                                        if (loading) stringResource(R.string.modules_loading)
+                                        else stringResource(R.string.modules_loaded_count, modules.size)
                                     } else {
-                                        "未获取 Root（模块管理需要 Root）"
+                                        stringResource(R.string.modules_no_root)
                                     }
                                 )
                             },
@@ -163,7 +166,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                         )
                         if (listError != null) {
                             ListItem(
-                                headlineContent = { Text("读取失败") },
+                                headlineContent = { Text(stringResource(R.string.modules_read_failed)) },
                                 supportingContent = { Text(listError ?: "") },
                                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -171,7 +174,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                         }
                         if (opError != null) {
                             ListItem(
-                                headlineContent = { Text("操作失败") },
+                                headlineContent = { Text(stringResource(R.string.modules_op_failed)) },
                                 supportingContent = { Text(opError ?: "") },
                                 leadingContent = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -185,7 +188,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                 item {
                     ReiCard {
                         ListItem(
-                            headlineContent = { Text("待安装模块") },
+                            headlineContent = { Text(stringResource(R.string.modules_pending_install)) },
                             supportingContent = {
                                 val p = pendingInstall
                                 val line1 = p?.name?.takeIf { it.isNotBlank() } ?: installZipLabel.ifBlank { installZip }
@@ -298,7 +301,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                             ) {
                                 Icon(
                                     imageVector = if (m.remove) Icons.Outlined.Replay else Icons.Outlined.DeleteOutline,
-                                    contentDescription = if (m.remove) "取消卸载" else "卸载",
+                                    contentDescription = if (m.remove) stringResource(R.string.modules_undo_uninstall) else stringResource(R.string.modules_uninstall),
                                 )
                             }
 
@@ -310,7 +313,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                             }
                             Spacer(Modifier.weight(1f))
                             Text(
-                                text = if (m.update) "有更新" else "",
+                                text = if (m.update) stringResource(R.string.modules_has_update) else "",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                             )

@@ -7,14 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 分区管理助手：通过 reid/ksud/apd 的 flash 子命令获取分区信息
+ * Partition helper: flash subcommand (reid/ksud/apd) for partition info.
  */
 object PartitionManagerHelper {
     private const val TAG = "PartitionManagerHelper"
 
-    /**
-     * 获取槽位信息
-     */
+    /** Get slot info. */
     suspend fun getSlotInfo(context: Context): SlotInfo? = withContext(Dispatchers.IO) {
         try {
             val r = ReidClient.exec(context, listOf("flash", "slots"), timeoutMs = 15_000L)
@@ -52,9 +50,7 @@ object PartitionManagerHelper {
         }
     }
 
-    /**
-     * 获取分区列表
-     */
+    /** Get partition list. */
     suspend fun getPartitionList(context: Context, slot: String?, scanAll: Boolean = false): List<PartitionInfo> = withContext(Dispatchers.IO) {
         try {
             val args = mutableListOf("flash", "list")
@@ -127,9 +123,7 @@ object PartitionManagerHelper {
         return ""
     }
 
-    /**
-     * 备份分区
-     */
+    /** Backup partition. */
     suspend fun backupPartition(
         context: Context,
         partition: String,
@@ -155,9 +149,7 @@ object PartitionManagerHelper {
         }
     }
 
-    /**
-     * 刷写分区
-     */
+    /** Flash partition. */
     suspend fun flashPartition(
         context: Context,
         imagePath: String,
@@ -183,9 +175,7 @@ object PartitionManagerHelper {
         }
     }
 
-    /**
-     * 映射逻辑分区（用于非活跃槽位）
-     */
+    /** Map logical partitions (inactive slot). */
     suspend fun mapLogicalPartitions(
         context: Context,
         slot: String,

@@ -230,7 +230,7 @@ void on_services() {
     // Hide bootloader unlock status (soft BL hiding)
     hide_bootloader_status();
 
-    // 创建长时间驻留的子进程：注册 Murasaki 服务、写入允许列表到 Rei 目录、供 Zygisk 桥接声明可注入的 App
+    // Long-lived child: register Murasaki service, write allowlist to Rei dir for Zygisk bridge
     pid_t pid = fork();
     if (pid < 0) {
         LOGW("Failed to fork Murasaki daemon: %s", strerror(errno));
@@ -238,11 +238,11 @@ void on_services() {
         return;
     }
     if (pid == 0) {
-        // 子进程：成为 Murasaki/Shizuku 服务进程，常驻后台
+        // Child: become Murasaki/Shizuku service process, run in background
         (void)ensure_dir_exists(REI_DIR);
         auto root_impl_opt = read_file(ROOT_IMPL_CONFIG_PATH);
         std::string root_impl = root_impl_opt ? trim(*root_impl_opt) : "ksu";
-        allowlist_sync_to_backend(root_impl);  // 同步到后端并写入 /data/adb/rei/.murasaki_allowlist
+        allowlist_sync_to_backend(root_impl);  // sync to backend and write /data/adb/rei/.murasaki_allowlist
         LOGI("Murasaki daemon child started (pid %d), joining Binder pool...", getpid());
         _exit(run_daemon());
     }
@@ -261,7 +261,7 @@ void on_boot_completed() {
     // Run boot-completed stage
     run_stage("boot-completed", false);
 
-    // reid 根目录 murasaki_dispatch：扫描声明了 MRSK/Shizuku 的 App（Sui 同款），尝试 BinderDispatcher，成功者提权为管理器；ksud/ap 共用
+    // murasaki_dispatch: scan MRSK/Shizuku apps (Sui style), try BinderDispatcher, elevate first success as manager; shared by ksud/ap
     LOGI("Dispatching Shizuku Binder to apps...");
     std::vector<AllowlistEntry> entries = allowlist_read_unified();
     std::optional<std::string> owner =

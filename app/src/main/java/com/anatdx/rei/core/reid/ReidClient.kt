@@ -49,7 +49,7 @@ object ReidClient {
         }
     }
 
-    /** 使用 reid 本体执行（用于 set-root-impl、allowlist 等 reid 专属命令）。参数在单条 su -c 命令内直接拼接并转义，避免嵌套 sh 与 $@ 导致参数被拆错。 */
+    /** Run reid binary (set-root-impl, allowlist, etc.). Args escaped in single su -c to avoid sh/$@ splitting. */
     suspend fun execReid(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
             val reidArgs = args.joinToString(" ") { shellEscape(it) }
@@ -58,7 +58,7 @@ object ReidClient {
         }
     }
 
-    /** 使用当前后端（ksud/apd/reid）执行。参数在单条 su -c 命令内直接拼接并转义，避免嵌套 sh 与 $@ 导致参数被拆错。 */
+    /** Run current backend (ksud/apd/reid). Args escaped in single su -c to avoid sh/$@ splitting. */
     suspend fun exec(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
             val backendArgs = args.joinToString(" ") { shellEscape(it) }

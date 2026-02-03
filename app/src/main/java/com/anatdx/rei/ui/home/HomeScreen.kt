@@ -36,8 +36,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.anatdx.rei.R
 import com.anatdx.rei.core.log.ReiLog
 import com.anatdx.rei.ApNatives
 import com.anatdx.rei.ReiApplication
@@ -172,17 +175,17 @@ private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: I
     LaunchedEffect(Unit, refreshTrigger) { refresh() }
 
     val (rootChip, rootIcon) = when (rootAccessState) {
-        RootAccessState.Requesting -> "Root: 检测中" to Icons.Outlined.Info
-        RootAccessState.Ignored -> "Root: 未检测" to Icons.Outlined.Info
-        is RootAccessState.Denied -> "Root: 未授权" to Icons.Outlined.ErrorOutline
-        is RootAccessState.Granted -> "Root: 已授权" to Icons.Outlined.CheckCircle
+        RootAccessState.Requesting -> stringResource(R.string.home_root_requesting) to Icons.Outlined.Info
+        RootAccessState.Ignored -> stringResource(R.string.home_root_ignored) to Icons.Outlined.Info
+        is RootAccessState.Denied -> stringResource(R.string.home_root_denied) to Icons.Outlined.ErrorOutline
+        is RootAccessState.Granted -> stringResource(R.string.home_root_granted) to Icons.Outlined.CheckCircle
     }
 
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("系统状态") },
-                supportingContent = { Text(sys.device.ifBlank { "设备" }) },
+                headlineContent = { Text(stringResource(R.string.home_system_status)) },
+                supportingContent = { Text(sys.device.ifBlank { stringResource(R.string.home_device) }) },
                 leadingContent = { Icon(Icons.Outlined.Storage, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -190,8 +193,8 @@ private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: I
                 headlineContent = { Text(rootChip) },
                 supportingContent = {
                     val detail = when (rootAccessState) {
-                        RootAccessState.Requesting -> "后台探测 su…"
-                        RootAccessState.Ignored -> "未执行 su 探测"
+                        RootAccessState.Requesting -> stringResource(R.string.home_root_requesting)
+                        RootAccessState.Ignored -> stringResource(R.string.home_root_ignored)
                         is RootAccessState.Denied -> rootAccessState.reason
                         is RootAccessState.Granted -> rootAccessState.stdout.lineSequence().firstOrNull().orEmpty()
                     }.take(80)
@@ -209,20 +212,20 @@ private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: I
             val rootImpl = ReiApplication.rootImplementation
             if (rootImpl == ReiApplication.VALUE_ROOT_IMPL_KSU && sys.ksu.isNotBlank()) {
                 ListItem(
-                    headlineContent = { Text("Root 实现 · KernelSU") },
+                    headlineContent = { Text(stringResource(R.string.home_root_impl_ksu)) },
                     supportingContent = { Text(sys.ksu) },
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             } else if (rootImpl == ReiApplication.VALUE_ROOT_IMPL_APATCH) {
                 ListItem(
-                    headlineContent = { Text("Root 实现 · KernelPatch") },
+                    headlineContent = { Text(stringResource(R.string.home_root_impl_kp)) },
                     supportingContent = {
                         Text(
                             when {
-                                sys.kpReady && sys.kpVersion.isNotBlank() -> "已安装 · ${sys.kpVersion}"
-                                sys.kpReady -> "已安装"
-                                else -> "未安装或未鉴权"
+                                sys.kpReady && sys.kpVersion.isNotBlank() -> stringResource(R.string.home_kp_installed, sys.kpVersion)
+                                sys.kpReady -> stringResource(R.string.home_kp_installed_short)
+                                else -> stringResource(R.string.home_kp_not_installed)
                             }
                         )
                     },
@@ -231,7 +234,7 @@ private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: I
                 )
             }
             ListItem(
-                headlineContent = { Text("Kernel") },
+                headlineContent = { Text(stringResource(R.string.home_kernel)) },
                 supportingContent = { Text(sys.kernel.ifBlank { "unknown" }) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -252,12 +255,12 @@ private fun SuperKeyPromptCard(onOpenSettings: () -> Unit) {
     ReiCard {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "超级密钥",
+                text = stringResource(R.string.home_superkey),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "如果您已安装 KP 后端，请输入超级密钥来获得权限。8–63 位，需含字母和数字。请在设置中填写并保存。",
+                text = stringResource(R.string.home_superkey_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -267,7 +270,7 @@ private fun SuperKeyPromptCard(onOpenSettings: () -> Unit) {
                 horizontalArrangement = Arrangement.End,
             ) {
                 androidx.compose.material3.TextButton(onClick = onOpenSettings) {
-                    Text("去设置")
+                    Text(stringResource(R.string.home_go_settings))
                 }
             }
         }
@@ -285,7 +288,7 @@ private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
     }
     when (kpReady) {
         true -> {
-            // KP 已就绪：可选显示一行提示或不做任何卡片
+            // KP ready: optional hint or no card
         }
         false -> {
             ReiCard {
@@ -294,13 +297,13 @@ private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
                         Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.padding(4.dp))
                         Text(
-                            text = "SuperKey 已设置，但 KP 后端未就绪",
+                            text = stringResource(R.string.home_superkey_set_not_ready),
                             style = MaterialTheme.typography.titleMedium,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "请确认已刷入 KernelPatch/APatch 内核，或检查 SuperKey 是否与设备一致。",
+                        text = stringResource(R.string.home_superkey_check_kp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -310,13 +313,13 @@ private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
                         horizontalArrangement = Arrangement.End,
                     ) {
                         androidx.compose.material3.TextButton(onClick = onOpenSettings) {
-                            Text("设置 SuperKey")
+                                Text(stringResource(R.string.home_set_superkey))
                         }
                     }
                 }
             }
         }
-        null -> { /* 检测中，不显示卡片 */ }
+        null -> { /* detecting, no card */ }
     }
 }
 
@@ -331,21 +334,21 @@ private fun ActionsCard(
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("快速操作") },
-                supportingContent = { Text("刷新检测 / 工具入口") },
+                headlineContent = { Text(stringResource(R.string.home_quick_actions)) },
+                supportingContent = { Text(stringResource(R.string.home_quick_actions_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("重新检测 Root") },
-                supportingContent = { Text("重新拉起授权并刷新状态") },
+                headlineContent = { Text(stringResource(R.string.home_redetect_root)) },
+                supportingContent = { Text(stringResource(R.string.home_redetect_root_desc)) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onRefreshRoot),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("分区管理") },
-                supportingContent = { Text("查看、备份、刷写分区，管理 A/B 槽位") },
+                headlineContent = { Text(stringResource(R.string.home_partition_manager)) },
+                supportingContent = { Text(stringResource(R.string.home_partition_manager_desc)) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenBootTools),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),

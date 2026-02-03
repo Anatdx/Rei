@@ -1,5 +1,5 @@
 // Murasaki Service - Binder Service Implementation
-// KernelSU 内核级 API 服务端
+// KernelSU kernel API server
 
 #include "murasaki_service.hpp"
 #include "../ksud/ksucalls.hpp"
@@ -20,18 +20,18 @@
 namespace ksud {
 namespace murasaki {
 
-// Murasaki 服务版本
+// Murasaki service version
 static constexpr int MURASAKI_VERSION = 1;
 
-// Unix socket 路径 (用于初期实现，后续可换成真正的 Binder)
+// Unix socket path (interim; can switch to real Binder later)
 static constexpr const char* MURASAKI_SOCKET_PATH = "/dev/socket/murasaki";
 
-// 全局服务实例
+// Global service instance
 static std::atomic<bool> g_service_running{false};
 static std::thread g_service_thread;
 static std::mutex g_service_mutex;
 
-// ==================== 辅助函数 ====================
+// ==================== Helpers ====================
 
 static bool is_ksu_available() {
     return get_version() > 0;
@@ -42,18 +42,17 @@ static int get_ksu_version() {
 }
 
 static bool is_uid_granted_root(int uid) {
-    // TODO: 通过 ioctl 检查
-    // 暂时简单实现：检查是否 root
+    // TODO: check via ioctl
     return uid == 0;
 }
 
 static bool is_uid_should_umount(int uid) {
-    // TODO: 通过 ioctl 检查
+    // TODO: check via ioctl
     return false;
 }
 
 static bool apply_sepolicy_rules(const std::string& rules) {
-    // TODO: 调用 sepolicy 模块
+    // TODO: call sepolicy module
     return false;
 }
 
@@ -62,7 +61,7 @@ static bool nuke_ext4_sysfs() {
     return false;  // HymoFS removed, no-op
 }
 
-// ==================== MurasakiService 实现 ====================
+// ==================== MurasakiService impl ====================
 
 MurasakiService& MurasakiService::getInstance() {
     static MurasakiService instance;
@@ -77,22 +76,19 @@ int MurasakiService::init() {
 
     LOGI("MurasakiService: Initializing...");
 
-    // 检查 KernelSU 是否可用
     if (!is_ksu_available()) {
         LOGE("MurasakiService: KernelSU not available!");
         return -1;
     }
 
-    // TODO: 实际的 Binder 注册
-    // 目前先用 Unix socket 作为过渡方案
-    // 后续可以切换到 libbinder
+    // TODO: real Binder registration; Unix socket interim
 
     initialized_ = true;
     LOGI("MurasakiService: Initialized successfully");
     return 0;
 }
 
-// run() 实现在 murasaki_ipc.cpp 里
+// run() is in murasaki_ipc.cpp
 
 void MurasakiService::stop() {
     running_ = false;
@@ -102,7 +98,7 @@ bool MurasakiService::isRunning() const {
     return running_;
 }
 
-// ==================== 服务接口实现 ====================
+// ==================== Service API impl ====================
 
 int MurasakiService::getVersion() {
     return MURASAKI_VERSION;
@@ -130,7 +126,6 @@ std::string MurasakiService::getSelinuxContext(int pid) {
     FILE* f = fopen(path.c_str(), "r");
     if (f) {
         if (fgets(buf, sizeof(buf), f)) {
-            // 去掉换行符
             char* nl = strchr(buf, '\n');
             if (nl)
                 *nl = '\0';
@@ -141,13 +136,12 @@ std::string MurasakiService::getSelinuxContext(int pid) {
 }
 
 int MurasakiService::setSelinuxContext(const std::string& context) {
-    // 需要内核支持
-    // TODO: 通过 ioctl 设置
+    // TODO: set via ioctl (kernel support required)
     LOGW("MurasakiService::setSelinuxContext not implemented yet");
     return -ENOSYS;
 }
 
-// ==================== HymoFS 操作 (stub, HymoFS removed) ====================
+// ==================== HymoFS (stub, removed) ====================
 
 int MurasakiService::hymoAddRule(const std::string&, const std::string&, int) {
     return -ENOSYS;
@@ -177,15 +171,15 @@ std::string MurasakiService::hymoGetActiveRules() {
     return "";
 }
 
-// ==================== KSU 操作 ====================
+// ==================== KSU ops ====================
 
 std::string MurasakiService::getAppProfile(int uid) {
-    // TODO: 从 profile 模块获取
+    // TODO: get from profile module
     return "";
 }
 
 int MurasakiService::setAppProfile(int uid, const std::string& profileJson) {
-    // TODO: 设置 profile
+    // TODO: set profile
     return -ENOSYS;
 }
 
@@ -202,7 +196,7 @@ int MurasakiService::injectSepolicy(const std::string& rules) {
 }
 
 int MurasakiService::addTryUmount(const std::string& path) {
-    // TODO: 实现
+    // TODO: implement
     return -ENOSYS;
 }
 
@@ -210,7 +204,7 @@ int MurasakiService::nukeExt4Sysfs() {
     return nuke_ext4_sysfs() ? 0 : -1;
 }
 
-// ==================== 全局函数 ====================
+// ==================== Global helpers ====================
 
 void start_murasaki_service_async() {
     std::lock_guard<std::mutex> lock(g_service_mutex);
@@ -229,7 +223,7 @@ void start_murasaki_service_async() {
         g_service_running.store(false);
     });
 
-    // 分离线程，让它在后台运行
+    // Detach thread to run in background
     g_service_thread.detach();
 
     LOGI("Murasaki service started in background");

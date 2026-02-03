@@ -43,7 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.anatdx.rei.R
 import com.anatdx.rei.ui.components.ReiCard
 import io.murasaki.Murasaki
 import io.murasaki.server.IHymoFsService
@@ -92,7 +94,7 @@ fun MurasakiStatusCard(
                     if (level < 0) {
                         return@withContext MurasakiStatus(
                             isConnected = false,
-                            error = "无法连接 Murasaki 服务",
+                            error = context.getString(R.string.murasaki_error_connect),
                         )
                     }
                     val service: IMurasakiService? = Murasaki.getMurasakiService()
@@ -101,7 +103,7 @@ fun MurasakiStatusCard(
                         serviceVersion = service?.version ?: -1,
                         ksuVersion = Murasaki.getKernelSuVersion(),
                         privilegeLevel = level,
-                        privilegeLevelName = privilegeLevelName(level),
+                        privilegeLevelName = privilegeLevelName(context, level),
                         isKernelModeAvailable = Murasaki.isKernelModeAvailable(),
                         selinuxContext = Murasaki.getSELinuxContext(),
                     )
@@ -121,7 +123,7 @@ fun MurasakiStatusCard(
                     }
                 }
             } catch (e: Exception) {
-                status = MurasakiStatus(isConnected = false, error = e.message ?: "未知错误")
+                status = MurasakiStatus(isConnected = false, error = e.message ?: context.getString(R.string.murasaki_error_unknown))
             } finally {
                 isLoading = false
             }
@@ -133,7 +135,7 @@ fun MurasakiStatusCard(
     ReiCard(modifier = modifier) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("Murasaki API") },
+                headlineContent = { Text(stringResource(R.string.murasaki_api)) },
                 supportingContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -151,9 +153,9 @@ fun MurasakiStatusCard(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = when {
-                                isLoading -> "连接中…"
-                                status.isConnected -> "已连接"
-                                else -> "未连接"
+                                isLoading -> stringResource(R.string.murasaki_connecting)
+                                status.isConnected -> stringResource(R.string.murasaki_connected)
+                                else -> stringResource(R.string.murasaki_disconnected)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -225,7 +227,7 @@ private fun MurasakiDetails(
                 Icon(levelIcon, contentDescription = null, tint = levelColor, modifier = Modifier.size(24.dp))
                 Column {
                     Text(
-                        text = "权限等级",
+                        text = stringResource(R.string.murasaki_privilege_level),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -242,22 +244,22 @@ private fun MurasakiDetails(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("服务版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.murasaki_service_version), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(if (status.serviceVersion >= 0) "v${status.serviceVersion}" else "N/A", style = MaterialTheme.typography.bodySmall)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("KSU 版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.murasaki_ksu_version), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(if (status.ksuVersion >= 0) status.ksuVersion.toString() else "N/A", style = MaterialTheme.typography.bodySmall)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("内核模式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (status.isKernelModeAvailable) "可用" else "不可用", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.murasaki_kernel_mode), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (status.isKernelModeAvailable) stringResource(R.string.murasaki_available) else stringResource(R.string.murasaki_unavailable), style = MaterialTheme.typography.bodySmall)
         }
         status.selinuxContext?.let { ctx ->
             Row(
@@ -274,12 +276,12 @@ private fun MurasakiDetails(
             FilterChip(
                 selected = hymoFsStatus.stealthEnabled,
                 onClick = onStealthToggle,
-                label = { Text("隐身") },
+                label = { Text(stringResource(R.string.murasaki_stealth)) },
                 leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, Modifier.size(18.dp)) },
             )
             if (hymoFsStatus.hideRulesCount > 0 || hymoFsStatus.redirectRulesCount > 0) {
                 Text(
-                    text = "活跃规则：${hymoFsStatus.hideRulesCount} 隐藏 / ${hymoFsStatus.redirectRulesCount} 重定向",
+                    text = stringResource(R.string.murasaki_rules_active, hymoFsStatus.hideRulesCount, hymoFsStatus.redirectRulesCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -304,7 +306,7 @@ private fun ConnectionError(error: String?, onRetry: () -> Unit) {
             modifier = Modifier.size(40.dp),
         )
         Text(
-            text = "连接失败",
+            text = stringResource(R.string.murasaki_connection_failed),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -318,14 +320,14 @@ private fun ConnectionError(error: String?, onRetry: () -> Unit) {
         OutlinedButton(onClick = onRetry) {
             Icon(Icons.Default.Refresh, contentDescription = null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("重试")
+            Text(stringResource(R.string.murasaki_retry))
         }
     }
 }
 
-private fun privilegeLevelName(level: Int): String = when (level) {
-    Murasaki.LEVEL_SHELL -> "SHELL (Shizuku 兼容)"
-    Murasaki.LEVEL_ROOT -> "ROOT (Sui 兼容)"
-    Murasaki.LEVEL_KERNEL -> "KERNEL (Murasaki 独占)"
-    else -> "Unknown ($level)"
+private fun privilegeLevelName(context: android.content.Context, level: Int): String = when (level) {
+    Murasaki.LEVEL_SHELL -> context.getString(R.string.murasaki_level_shell)
+    Murasaki.LEVEL_ROOT -> context.getString(R.string.murasaki_level_root)
+    Murasaki.LEVEL_KERNEL -> context.getString(R.string.murasaki_level_kernel)
+    else -> context.getString(R.string.murasaki_level_unknown, level)
 }

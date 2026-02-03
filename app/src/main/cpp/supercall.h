@@ -40,7 +40,7 @@ static inline long sc_su(const char *key, struct su_profile *profile)
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU), profile);
 }
 
-/** KernelPatch 版本号 (sc 0x1008) */
+/** KernelPatch version (sc 0x1008). */
 static inline uint32_t sc_kp_ver(const char *key)
 {
     if (!key || !key[0]) return 0;
@@ -48,7 +48,7 @@ static inline uint32_t sc_kp_ver(const char *key)
     return (uint32_t)ret;
 }
 
-/** 内核版本号 (sc 0x1009) */
+/** Kernel version (sc 0x1009). */
 static inline uint32_t sc_k_ver(const char *key)
 {
     if (!key || !key[0]) return 0;
@@ -56,7 +56,7 @@ static inline uint32_t sc_k_ver(const char *key)
     return (uint32_t)ret;
 }
 
-/** 构建时间 (sc 0x1007)，写入 buildtime 缓冲区，返回字节数或负错误码 */
+/** Build time (sc 0x1007); write to buildtime buffer; return byte count or negative errno. */
 static inline long sc_get_build_time(const char *key, char *buildtime, size_t len)
 {
     if (!key || !key[0]) return -EINVAL;
@@ -64,7 +64,7 @@ static inline long sc_get_build_time(const char *key, char *buildtime, size_t le
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_BUILD_TIME), buildtime, len);
 }
 
-/** 当前 su 可执行路径 (sc 0x1110) */
+/** Current su path (sc 0x1110). */
 static inline long sc_su_get_path(const char *key, char *out_path, int path_len)
 {
     if (!key || !key[0]) return -EINVAL;
@@ -72,14 +72,14 @@ static inline long sc_su_get_path(const char *key, char *out_path, int path_len)
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_GET_PATH), out_path, path_len);
 }
 
-/** 已授权 UID 数量 (sc 0x1102) */
+/** Count of allowed UIDs (sc 0x1102). */
 static inline long sc_su_uid_nums(const char *key)
 {
     if (!key || !key[0]) return -EINVAL;
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_NUMS));
 }
 
-/** 已授权 UID 列表 (sc 0x1103)，uids 预分配 num 个，返回写入个数或负错误码 */
+/** Allowed UID list (sc 0x1103); uids preallocated for num; return count written or negative errno. */
 static inline long sc_su_allow_uids(const char *key, uid_t *uids, int num)
 {
     if (!key || !key[0]) return -EINVAL;
@@ -87,7 +87,7 @@ static inline long sc_su_allow_uids(const char *key, uid_t *uids, int num)
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_LIST), uids, num);
 }
 
-/** 授权 UID (sc 0x1100) */
+/** Grant UID (sc 0x1100). */
 static inline long sc_su_grant_uid(const char *key, struct su_profile *profile)
 {
     if (!key || !key[0]) return -EINVAL;
@@ -95,7 +95,7 @@ static inline long sc_su_grant_uid(const char *key, struct su_profile *profile)
     return syscall(__NR_supercall, key, ver_and_cmd(key, SUPERCALL_SU_GRANT_UID), profile);
 }
 
-/** 撤销 UID (sc 0x1101) */
+/** Revoke UID (sc 0x1101). */
 static inline long sc_su_revoke_uid(const char *key, uid_t uid)
 {
     if (!key || !key[0]) return -EINVAL;

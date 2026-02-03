@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
@@ -35,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.OutlinedTextField
@@ -73,6 +75,11 @@ import com.anatdx.rei.ui.theme.BackgroundManager
 import com.anatdx.rei.ui.theme.BackgroundPrefs
 import com.anatdx.rei.ui.theme.rememberBackgroundConfig
 import com.anatdx.rei.ui.theme.rememberChromeStyleConfig
+import androidx.compose.ui.res.stringResource
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import android.app.Activity
+import com.anatdx.rei.R
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.reid.ReidClient
@@ -116,6 +123,10 @@ fun SettingsScreen(
         }
 
         item {
+            LanguageCard()
+        }
+
+        item {
             AppearanceCard(
                 themeMode = themeMode,
                 dynamicColor = dynamicColor,
@@ -128,6 +139,91 @@ fun SettingsScreen(
         item { AboutCard() }
 
         item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+private val LANGUAGE_TAGS = listOf("", "zh", "zh-TW", "en", "ja", "fr", "ru", "ko", "es")
+
+@Composable
+private fun LanguageDisplayName(tag: String) {
+    Text(
+        when (tag) {
+            "" -> stringResource(R.string.language_system)
+            "zh" -> stringResource(R.string.language_zh)
+            "zh-TW" -> stringResource(R.string.language_zh_tw)
+            "en" -> stringResource(R.string.language_en)
+            "ja" -> stringResource(R.string.language_ja)
+            "fr" -> stringResource(R.string.language_fr)
+            "ru" -> stringResource(R.string.language_ru)
+            "ko" -> stringResource(R.string.language_ko)
+            "es" -> stringResource(R.string.language_es)
+            else -> tag.ifBlank { stringResource(R.string.language_system) }
+        }
+    )
+}
+
+@Composable
+private fun LanguageCard() {
+    val context = LocalContext.current
+    val currentTag = ReiApplication.appLanguage
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+
+    ReiCard {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_language)) },
+            supportingContent = { LanguageDisplayName(currentTag) },
+            leadingContent = { Icon(Icons.Outlined.Language, contentDescription = null) },
+            trailingContent = {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+            },
+            modifier = Modifier.clickable { showDialog = true },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(stringResource(R.string.settings_language)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LANGUAGE_TAGS.forEach { tag ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    ReiApplication.appLanguage = tag
+                                    if (tag.isEmpty()) {
+                                        AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+                                    } else {
+                                        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+                                    }
+                                    showDialog = false
+                                    (context as? Activity)?.recreate()
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = currentTag == tag,
+                                onClick = null,
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            LanguageDisplayName(tag)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 }
 
@@ -160,8 +256,8 @@ private fun AppearanceCard(
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("外观") },
-                supportingContent = { Text("主题模式 / 动态取色 / 主题色") },
+                headlineContent = { Text(stringResource(R.string.settings_appearance)) },
+                supportingContent = { Text(stringResource(R.string.settings_appearance_desc)) },
                 leadingContent = { Icon(Icons.Outlined.ColorLens, contentDescription = null) },
                 trailingContent = {
                     Icon(
@@ -180,24 +276,24 @@ private fun AppearanceCard(
             ) {
                 Column {
                     ThemeModeRow(
-                        title = "跟随系统",
+                        title = stringResource(R.string.settings_theme_system),
                         selected = themeMode == ThemeMode.System,
                         onClick = { onThemeModeChange(ThemeMode.System) },
                     )
                     ThemeModeRow(
-                        title = "浅色",
+                        title = stringResource(R.string.settings_theme_light),
                         selected = themeMode == ThemeMode.Light,
                         onClick = { onThemeModeChange(ThemeMode.Light) },
                     )
                     ThemeModeRow(
-                        title = "深色",
+                        title = stringResource(R.string.settings_theme_dark),
                         selected = themeMode == ThemeMode.Dark,
                         onClick = { onThemeModeChange(ThemeMode.Dark) },
                     )
 
                     ListItem(
-                        headlineContent = { Text("动态取色 (Android 12+)") },
-                        supportingContent = { Text("开启后跟随系统壁纸配色（开启时主题色选项不生效）") },
+                        headlineContent = { Text(stringResource(R.string.settings_dynamic_color)) },
+                        supportingContent = { Text(stringResource(R.string.settings_dynamic_color_desc)) },
                         leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
                         trailingContent = {
                             Switch(
@@ -215,25 +311,25 @@ private fun AppearanceCard(
                     ) {
                         Column(modifier = Modifier.padding(bottom = 8.dp)) {
                             ThemePresetRow(
-                                title = "冰蓝",
+                                title = stringResource(R.string.settings_preset_ice_blue),
                                 previewColor = IceBlue40,
                                 selected = themePreset == ThemePreset.IceBlue,
                                 onClick = { onThemePresetChange(ThemePreset.IceBlue) },
                             )
                             ThemePresetRow(
-                                title = "翡翠",
+                                title = stringResource(R.string.settings_preset_emerald),
                                 previewColor = Emerald40,
                                 selected = themePreset == ThemePreset.Emerald,
                                 onClick = { onThemePresetChange(ThemePreset.Emerald) },
                             )
                             ThemePresetRow(
-                                title = "落日",
+                                title = stringResource(R.string.settings_preset_sunset),
                                 previewColor = Sunset40,
                                 selected = themePreset == ThemePreset.Sunset,
                                 onClick = { onThemePresetChange(ThemePreset.Sunset) },
                             )
                             ThemePresetRow(
-                                title = "紫色（默认）",
+                                title = stringResource(R.string.settings_preset_purple),
                                 previewColor = Purple40,
                                 selected = themePreset == ThemePreset.Purple,
                                 onClick = { onThemePresetChange(ThemePreset.Purple) },
@@ -241,10 +337,10 @@ private fun AppearanceCard(
                         }
                     }
 
-                    val bgName = bg.path?.let { runCatching { File(it).name }.getOrNull() } ?: "未选择"
+                    val bgName = bg.path?.let { runCatching { File(it).name }.getOrNull() } ?: stringResource(R.string.settings_bg_not_selected)
                     ListItem(
-                        headlineContent = { Text("背景图片") },
-                        supportingContent = { Text(if (bg.enabled) "已启用：$bgName" else "关闭（使用默认背景）") },
+                        headlineContent = { Text(stringResource(R.string.settings_bg_image)) },
+                        supportingContent = { Text(if (bg.enabled) stringResource(R.string.settings_bg_enabled, bgName) else stringResource(R.string.settings_bg_off)) },
                         leadingContent = { Icon(Icons.Outlined.Image, contentDescription = null) },
                         trailingContent = {
                             Switch(
@@ -261,7 +357,7 @@ private fun AppearanceCard(
                     ) {
                         if (bg.path?.isNotBlank() == true) {
                             Text(
-                                text = "清除",
+                                text = stringResource(R.string.settings_clear),
                                 modifier = Modifier
                                     .align(Alignment.CenterStart)
                                     .clickable {
@@ -285,7 +381,7 @@ private fun AppearanceCard(
                     AnimatedVisibility(visible = bg.enabled) {
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             Text(
-                                text = "透明度",
+                                text = stringResource(R.string.settings_opacity),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -296,7 +392,7 @@ private fun AppearanceCard(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "遮罩",
+                                text = stringResource(R.string.settings_overlay),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -309,8 +405,8 @@ private fun AppearanceCard(
                     }
 
                     ListItem(
-                        headlineContent = { Text("界面透明度") },
-                        supportingContent = { Text("卡片主体 / 页首页脚 / 边缘高光（联动）") },
+                        headlineContent = { Text(stringResource(R.string.settings_ui_opacity)) },
+                        supportingContent = { Text(stringResource(R.string.settings_ui_opacity_desc)) },
                         leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
@@ -336,10 +432,8 @@ private fun RootImplCard() {
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("Root 实现") },
-                supportingContent = {
-                    Text("KernelSU 与 KernelPatch/APatch 二选一：仅创建 ksud 或仅创建 apd 硬链接。")
-                },
+                headlineContent = { Text(stringResource(R.string.settings_root_impl)) },
+                supportingContent = { Text(stringResource(R.string.settings_root_impl_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -408,13 +502,13 @@ private fun SuperkeyCard() {
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("APatch SuperKey") },
+                headlineContent = { Text(stringResource(R.string.settings_apatch_superkey)) },
                 supportingContent = {
                     Text(
                         if (ReiApplication.superKey.isNotEmpty())
-                            "已设置（用于 AP/KernelPatch 鉴权）"
+                            stringResource(R.string.settings_superkey_set)
                         else
-                            "如果您已安装 KP 后端，请输入超级密钥来获得权限。8–63 位，需含字母和数字。"
+                            stringResource(R.string.settings_superkey_hint_short)
                     )
                 },
                 leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
@@ -432,21 +526,21 @@ private fun SuperkeyCard() {
                         input = it
                         validationError = when {
                             it.isEmpty() -> null
-                            !ReiKeyHelper.isValidSuperKey(it) -> "需 8–63 位且含字母和数字"
+                            !ReiKeyHelper.isValidSuperKey(it) -> ""
                             else -> null
                         }
                     },
-                    label = { Text("SuperKey") },
-                    placeholder = { Text("可选，AP/KP 后端时必填") },
+                    label = { Text(stringResource(R.string.settings_superkey_label)) },
+                    placeholder = { Text(stringResource(R.string.settings_superkey_placeholder)) },
                     visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.weight(1f),
                     isError = validationError != null,
-                    supportingText = validationError?.let { { Text(it) } },
+                    supportingText = validationError?.let { { Text(stringResource(R.string.settings_superkey_validation)) } },
                 )
                 Icon(
                     imageVector = if (keyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = if (keyVisible) "隐藏" else "显示",
+                    contentDescription = if (keyVisible) stringResource(R.string.settings_visibility_hide) else stringResource(R.string.settings_visibility_show),
                     modifier = Modifier
                         .size(24.dp)
                         .padding(start = 8.dp)
@@ -466,7 +560,7 @@ private fun SuperkeyCard() {
                         input = ""
                         validationError = null
                     }) {
-                        Text("清除")
+                        Text(stringResource(R.string.settings_clear))
                     }
                 }
                 TextButton(
@@ -478,7 +572,7 @@ private fun SuperkeyCard() {
                             return@TextButton
                         }
                         if (!ReiKeyHelper.isValidSuperKey(input)) {
-                            validationError = "需 8–63 位且含字母和数字"
+                            validationError = ""
                             return@TextButton
                         }
                         ReiApplication.superKey = input
@@ -486,7 +580,7 @@ private fun SuperkeyCard() {
                         validationError = null
                     }
                 ) {
-                    Text("保存")
+                    Text(stringResource(R.string.settings_save))
                 }
             }
         }
@@ -502,29 +596,29 @@ private fun ManageCard(
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("管理") },
-                supportingContent = { Text("日志 / Boot 工具 / KP 修补") },
+                headlineContent = { Text(stringResource(R.string.settings_manage)) },
+                supportingContent = { Text(stringResource(R.string.settings_manage_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("日志") },
-                supportingContent = { Text("应用日志与命令输出") },
+                headlineContent = { Text(stringResource(R.string.title_logs)) },
+                supportingContent = { Text(stringResource(R.string.settings_logs_desc)) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenLogs),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("分区管理") },
-                supportingContent = { Text("查看、备份、刷写分区，管理 A/B 槽位") },
+                headlineContent = { Text(stringResource(R.string.title_partition_manager)) },
+                supportingContent = { Text(stringResource(R.string.settings_partition_manager_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenBootTools),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("KP 修补") },
-                supportingContent = { Text("KernelPatch kpimg 信息 / 修补入口") },
+                headlineContent = { Text(stringResource(R.string.settings_kp_patch)) },
+                supportingContent = { Text(stringResource(R.string.settings_kp_patch_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenPatches),
@@ -592,8 +686,8 @@ private fun AboutCard() {
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
-                headlineContent = { Text("关于") },
-                supportingContent = { Text("Rei · 多后端 Root 管理器（UI 原型）") },
+                headlineContent = { Text(stringResource(R.string.settings_about)) },
+                supportingContent = { Text(stringResource(R.string.settings_about_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )

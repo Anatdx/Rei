@@ -3,46 +3,46 @@ package com.anatdx.rei
 import androidx.annotation.Keep
 
 /**
- * APatch/KernelPatch supercall JNI - 使用超级密钥通过 syscall 向内核鉴权并提权。
- * 与 IcePatch 一致：nativeReady 检测 KP 后端，nativeSu 用 superkey 将当前线程提权为 root。
+ * APatch/KernelPatch supercall JNI: auth and elevate via superkey.
+ * nativeReady checks KP backend; nativeSu elevates current thread to root via superkey.
  */
 object ApNatives {
     init {
         runCatching { System.loadLibrary("apjni") }
     }
 
-    /** KP 后端是否就绪（supercall 鉴权成功） */
+    /** Whether KP backend is ready (supercall auth ok). */
     @Keep
     external fun nativeReady(superKey: String): Boolean
 
     /**
-     * 使用超级密钥将当前线程提权为 toUid（通常 0=root）。
-     * @return 0 成功，负数错误码
+     * Elevate current thread to toUid (usually 0=root) via superkey.
+     * @return 0 on success, negative errno
      */
     @Keep
     external fun nativeSu(superKey: String, toUid: Int, scontext: String?): Long
 
-    /** 当前 su 可执行路径（KP 后端返回） */
+    /** Current su path (from KP backend). */
     @Keep
     external fun nativeSuPath(superKey: String): String
 
-    /** KernelPatch 版本号（如 0x000a0700 表示 0.10.7） */
+    /** KernelPatch version (e.g. 0x000a0700 for 0.10.7). */
     @Keep
     external fun nativeKernelPatchVersion(superKey: String): Long
 
-    /** 诊断信息：hello / kp_ver / kernel_ver / build_time（多行文本） */
+    /** Diag string: hello, kp_ver, kernel_ver, build_time. */
     @Keep
     external fun nativeDiag(superKey: String): String
 
-    /** 已授权 UID 列表（KP supercall 0x1102+0x1103），备用方案 */
+    /** Allowed UID list (KP supercall 0x1102+0x1103), fallback. */
     @Keep
     external fun nativeSuUids(superKey: String): IntArray
 
-    /** 授权 UID（KP supercall 0x1100），备用方案 */
+    /** Grant UID (KP supercall 0x1100), fallback. */
     @Keep
     external fun nativeGrantSu(superKey: String, uid: Int, toUid: Int, scontext: String?): Long
 
-    /** 撤销 UID（KP supercall 0x1101），备用方案 */
+    /** Revoke UID (KP supercall 0x1101), fallback. */
     @Keep
     external fun nativeRevokeSu(superKey: String, uid: Int): Long
 

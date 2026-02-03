@@ -138,7 +138,7 @@ bool OnPostDataFs(const std::string& superkey) {
 
 bool OnServices(const std::string& superkey) {
   LOGI("on_services triggered!");
-  // Murasaki daemon：fork 子进程常驻，注册 Binder 服务、供 Zygisk 桥接声明可注入的 App
+  // Murasaki daemon: fork child, register Binder service for Zygisk bridge
   pid_t pid = fork();
   if (pid < 0) {
     LOGW("Failed to fork Murasaki daemon: %s", strerror(errno));
