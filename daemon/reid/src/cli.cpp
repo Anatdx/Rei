@@ -140,6 +140,7 @@ static void print_usage() {
     printf("  flash          Flash partition images\n");
     printf("  umount         Manage umount paths\n");
     printf("  kernel         Kernel interface\n");
+    printf("  set-root-impl <ksu|apatch>  Root 实现二选一：ksu 仅创建 ksud，apatch 仅创建 apd\n");
     printf("  debug          For developers\n");
     printf("  help           Show this help\n");
     printf("  version        Show version\n");
@@ -1054,6 +1055,17 @@ int cli_run(int argc, char* argv[]) {
         return cmd_umount(args);
     } else if (cmd == "kernel") {
         return cmd_kernel(args);
+    } else if (cmd == "set-root-impl") {
+        if (args.size() < 1) {
+            printf("USAGE: ksud set-root-impl <ksu|apatch>\n");
+            return 1;
+        }
+        const std::string& impl = args[0];
+        if (impl != "ksu" && impl != "apatch") {
+            printf("Invalid root impl: %s (use ksu or apatch)\n", impl.c_str());
+            return 1;
+        }
+        return set_root_impl(impl);
     } else if (cmd == "debug") {
         return cmd_debug(args);
     } else if (cmd == "flash") {

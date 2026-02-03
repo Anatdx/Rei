@@ -2,8 +2,10 @@ import com.android.build.api.variant.AndroidComponentsExtension
 import org.gradle.api.GradleException
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.process.ExecOperations
 import java.io.File
+import java.net.URI
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import java.util.Properties
@@ -78,10 +80,16 @@ android {
         compose = true
     }
 
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
+
     // Include generated native outputs (built by Gradle tasks below).
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir(File(buildDir, "generated/jniLibs"))
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/jniLibs").get().asFile.absolutePath)
         }
     }
 }
@@ -253,8 +261,113 @@ val buildNativeArm64 = tasks.register<BuildReiNativeArm64Task>("buildReiNativeAr
     inputs.dir(kernelsuJniSrc)
 }
 
+// Build-time download: kpimg and kptools for KernelPatch patch flow (optional; requires network).
+val kernelPatchVersionFallback: String = (rootProject.findProperty("kernelPatchVersion") as String?) ?: "0.10.7"
+val kernelPatchReleasesUrl = "https://api.github.com/repos/bmax121/KernelPatch/releases/latest"
+val kernelPatchBaseUrl = "https://github.com/bmax121/KernelPatch/releases/download"
+
+/** 从 GitHub API 获取最新 release 的 tag_name，失败时返回 null */
+fun fetchLatestKernelPatchTag(): String? = runCatching {
+    val conn = URI.create(kernelPatchReleasesUrl).toURL().openConnection()
+    conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+    conn.connectTimeout = 10_000
+    conn.readTimeout = 10_000
+    conn.getInputStream().bufferedReader().use { reader ->
+        val json = reader.readText()
+        val regex = """"tag_name"\s*:\s*"([^"]+)"""".toRegex()
+        regex.find(json)?.groupValues?.get(1)
+    }
+}.getOrNull()
+
+val resolveKernelPatchVersion = tasks.register("resolveKernelPatchVersion") {
+    val versionFile = layout.buildDirectory.file("kernelpatch-release-tag.txt").get().asFile
+    outputs.file(versionFile)
+    doLast {
+        val tag = fetchLatestKernelPatchTag()
+        val version = tag ?: kernelPatchVersionFallback
+        versionFile.parentFile?.mkdirs()
+        versionFile.writeText(version)
+        println(" - KernelPatch release: $version${if (tag == null) " (fallback, API unreachable)" else ""}")
+    }
+}
+
+fun registerDownloadTask(
+    taskName: String,
+    srcUrl: String,
+    destPath: String,
+): TaskProvider<*> {
+    return tasks.register(taskName) {
+        val destFile = file(destPath)
+        outputs.file(destFile)
+        doLast {
+            destFile.parentFile?.mkdirs()
+            if (!destFile.exists() || isFileUpdated(srcUrl, destFile)) {
+                println(" - Downloading $srcUrl to ${destFile.absolutePath}")
+                downloadFile(srcUrl, destFile)
+                println(" - Download completed.")
+            } else {
+                println(" - File is up-to-date, skipping download.")
+            }
+        }
+    }
+}
+
+/** 使用「先解析最新 release 版本再下载」的 KP 资源任务 */
+fun registerKernelPatchDownloadTask(
+    taskName: String,
+    assetName: String,
+    destPath: String,
+): TaskProvider<*> {
+    return tasks.register(taskName) {
+        dependsOn(resolveKernelPatchVersion)
+        val versionFile = layout.buildDirectory.file("kernelpatch-release-tag.txt").get().asFile
+        val destFile = file(destPath)
+        outputs.file(destFile)
+        doLast {
+            val tag = versionFile.readText().trim().ifBlank { kernelPatchVersionFallback }
+            val tagForUrl = tag.removePrefix("v")  // 链接里用纯版本号，如 0.13.0
+            val srcUrl = "$kernelPatchBaseUrl/$tagForUrl/$assetName"
+            destFile.parentFile?.mkdirs()
+            if (!destFile.exists() || isFileUpdated(srcUrl, destFile)) {
+                println(" - Downloading $srcUrl to ${destFile.absolutePath}")
+                downloadFile(srcUrl, destFile)
+                println(" - Download completed.")
+            } else {
+                println(" - File is up-to-date, skipping download.")
+            }
+        }
+    }
+}
+
+fun isFileUpdated(url: String, localFile: File): Boolean = runCatching {
+    val conn = URI.create(url).toURL().openConnection()
+    try {
+        val remote = conn.getHeaderFieldDate("Last-Modified", 0L)
+        remote > localFile.lastModified()
+    } finally {
+        (conn as? java.io.Closeable)?.close()
+    }
+}.getOrElse { true }
+
+fun downloadFile(url: String, destFile: File) {
+    URI.create(url).toURL().openStream().use { input ->
+        destFile.outputStream().use { output -> input.copyTo(output) }
+    }
+}
+
+val downloadKpimg = registerKernelPatchDownloadTask(
+    taskName = "downloadKpimg",
+    assetName = "kpimg-android",
+    destPath = "${project.projectDir}/src/main/assets/kpimg",
+)
+val downloadKptools = registerKernelPatchDownloadTask(
+    taskName = "downloadKptools",
+    assetName = "kptools-android",
+    destPath = "${project.layout.buildDirectory.get().asFile}/generated/jniLibs/arm64-v8a/libkptools.so",
+)
+
 tasks.named("preBuild").configure {
-    dependsOn(buildNativeArm64)
+    dependsOn(buildNativeArm64, downloadKpimg, downloadKptools)
 }
 
 fun verifyApkHasNative(apk: File, abi: String = "arm64-v8a") {
@@ -283,7 +396,7 @@ fun verifyApkHasNative(apk: File, abi: String = "arm64-v8a") {
 tasks.register("verifyDebugApkHasNative") {
     dependsOn("assembleDebug")
     doLast {
-        val apk = File(project.buildDir, "outputs/apk/debug/app-debug.apk")
+        val apk = project.layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
         verifyApkHasNative(apk)
     }
 }
@@ -291,7 +404,7 @@ tasks.register("verifyDebugApkHasNative") {
 tasks.register("verifyReleaseApkHasNative") {
     dependsOn("assembleRelease")
     doLast {
-        val apk = File(project.buildDir, "outputs/apk/release/app-release.apk")
+        val apk = project.layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
         verifyApkHasNative(apk)
     }
 }

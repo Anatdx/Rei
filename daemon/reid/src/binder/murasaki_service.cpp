@@ -4,8 +4,6 @@
 #include "murasaki_service.hpp"
 #include "../core/ksucalls.hpp"
 #include "../defs.hpp"
-#include "../hymo/hymo_utils.hpp"
-#include "../hymo/mount/hymofs.hpp"
 #include "../log.hpp"
 #include "../profile/profile.hpp"
 #include "../sepolicy/sepolicy.hpp"
@@ -21,8 +19,6 @@
 
 namespace ksud {
 namespace murasaki {
-
-using namespace hymo;  // For HymoFS and HymoFSStatus
 
 // Murasaki 服务版本
 static constexpr int MURASAKI_VERSION = 1;
@@ -62,7 +58,8 @@ static bool apply_sepolicy_rules(const std::string& rules) {
 }
 
 static bool nuke_ext4_sysfs() {
-    return hymo::ksu_nuke_sysfs("") == true;
+    (void)0;
+    return false;  // HymoFS removed, no-op
 }
 
 // ==================== MurasakiService 实现 ====================
@@ -116,19 +113,14 @@ int MurasakiService::getKernelSuVersion() {
 }
 
 PrivilegeLevel MurasakiService::getPrivilegeLevel(int callingUid) {
-    // 检查是否有 Root 权限
     if (is_uid_granted_root(callingUid)) {
-        // 进一步检查是否支持内核级
-        if (is_ksu_available() && HymoFS::check_status() == HymoFSStatus::Available) {
-            return PrivilegeLevel::KERNEL;
-        }
-        return PrivilegeLevel::ROOT;
+        return PrivilegeLevel::ROOT;  // HymoFS removed, no KERNEL
     }
     return PrivilegeLevel::SHELL;
 }
 
 bool MurasakiService::isKernelModeAvailable() {
-    return is_ksu_available() && HymoFS::check_status() == HymoFSStatus::Available;
+    return false;  // HymoFS removed
 }
 
 std::string MurasakiService::getSelinuxContext(int pid) {
@@ -155,34 +147,34 @@ int MurasakiService::setSelinuxContext(const std::string& context) {
     return -ENOSYS;
 }
 
-// ==================== HymoFS 操作 ====================
+// ==================== HymoFS 操作 (stub, HymoFS removed) ====================
 
-int MurasakiService::hymoAddRule(const std::string& src, const std::string& target, int type) {
-    return HymoFS::add_rule(src, target, type) ? 0 : -1;
+int MurasakiService::hymoAddRule(const std::string&, const std::string&, int) {
+    return -ENOSYS;
 }
 
 int MurasakiService::hymoClearRules() {
-    return HymoFS::clear_rules() ? 0 : -1;
+    return 0;
 }
 
-int MurasakiService::hymoSetStealth(bool enable) {
-    return HymoFS::set_stealth(enable) ? 0 : -1;
+int MurasakiService::hymoSetStealth(bool) {
+    return -ENOSYS;
 }
 
-int MurasakiService::hymoSetDebug(bool enable) {
-    return HymoFS::set_debug(enable) ? 0 : -1;
+int MurasakiService::hymoSetDebug(bool) {
+    return -ENOSYS;
 }
 
-int MurasakiService::hymoSetMirrorPath(const std::string& path) {
-    return HymoFS::set_mirror_path(path) ? 0 : -1;
+int MurasakiService::hymoSetMirrorPath(const std::string&) {
+    return -ENOSYS;
 }
 
 int MurasakiService::hymoFixMounts() {
-    return HymoFS::fix_mounts() ? 0 : -1;
+    return -ENOSYS;
 }
 
 std::string MurasakiService::hymoGetActiveRules() {
-    return HymoFS::get_active_rules();
+    return "";
 }
 
 // ==================== KSU 操作 ====================

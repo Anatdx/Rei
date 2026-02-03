@@ -1,5 +1,8 @@
 package com.anatdx.rei.core.root
 
+import com.anatdx.rei.ApNatives
+import com.anatdx.rei.ReiApplication
+import com.anatdx.rei.core.auth.ReiKeyHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -42,9 +45,16 @@ object RootShell {
     suspend fun exec(command: String, timeoutMs: Long = 30_000L): RootExecResult {
         return withContext(Dispatchers.IO) {
             return@withContext runCatching {
-                val p = ProcessBuilder("su", "-c", command)
-                    .redirectErrorStream(true)
-                    .start()
+                val superKey = ReiApplication.superKey
+                val useSupercall = superKey.isNotEmpty() && ReiKeyHelper.isValidSuperKey(superKey)
+                val elevated = useSupercall && ApNatives.su(superKey, 0, null)
+
+                val p = if (elevated) {
+                    ProcessBuilder("sh", "-c", command)
+                } else {
+                    ProcessBuilder("su", "-c", command)
+                }.redirectErrorStream(true).start()
+
                 val done = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
                 if (!done) {
                     p.destroy()

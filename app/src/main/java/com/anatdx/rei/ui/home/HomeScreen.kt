@@ -40,6 +40,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.anatdx.rei.core.log.ReiLog
+import com.anatdx.rei.ApNatives
+import com.anatdx.rei.ReiApplication
+import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.ui.auth.AuthLevel
@@ -66,6 +69,15 @@ fun HomeScreen(
     ) {
         item { Spacer(Modifier.height(4.dp)) }
 
+        if (ReiApplication.superKey.isEmpty()) {
+            item {
+                SuperKeyPromptCard(onOpenSettings = onOpenSettings)
+            }
+        } else if (ReiKeyHelper.isValidSuperKey(ReiApplication.superKey)) {
+            item {
+                KpReadyHintCard(onOpenSettings = onOpenSettings)
+            }
+        }
         item { SystemStatusCard(rootAccessState) }
         item {
             ActionsCard(
@@ -85,6 +97,8 @@ private data class SystemStatus(
     val selinux: String = "",
     val device: String = "",
     val ksu: String = "",
+    val kpReady: Boolean = false,
+    val kpVersion: String = "",
 )
 
 @Composable
@@ -133,7 +147,18 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                     ""
                 }
             }
-            sys = sys.copy(kernel = kernel, selinux = selinux, ksu = ksu)
+            val key = ReiApplication.superKey
+            val (kpReady, kpVersion) = withContext(Dispatchers.Default) {
+                if (key.isNotEmpty() && ReiKeyHelper.isValidSuperKey(key)) {
+                    val ready = ApNatives.ready(key)
+                    val ver = if (ready) ApNatives.kernelPatchVersion(key) else 0L
+                    val verStr = if (ver > 0L) formatKpVersion(ver) else ""
+                    ready to verStr
+                } else {
+                    false to ""
+                }
+            }
+            sys = sys.copy(kernel = kernel, selinux = selinux, ksu = ksu, kpReady = kpReady, kpVersion = kpVersion)
         }
     }
 
@@ -180,10 +205,26 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 leadingContent = { Icon(Icons.Outlined.Security, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            if (sys.ksu.isNotBlank()) {
+            val rootImpl = ReiApplication.rootImplementation
+            if (rootImpl == ReiApplication.VALUE_ROOT_IMPL_KSU && sys.ksu.isNotBlank()) {
                 ListItem(
-                    headlineContent = { Text("KernelSU") },
+                    headlineContent = { Text("Root 实现 · KernelSU") },
                     supportingContent = { Text(sys.ksu) },
+                    leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            } else if (rootImpl == ReiApplication.VALUE_ROOT_IMPL_APATCH) {
+                ListItem(
+                    headlineContent = { Text("Root 实现 · KernelPatch") },
+                    supportingContent = {
+                        Text(
+                            when {
+                                sys.kpReady && sys.kpVersion.isNotBlank() -> "已安装 · ${sys.kpVersion}"
+                                sys.kpReady -> "已安装"
+                                else -> "未安装或未鉴权"
+                            }
+                        )
+                    },
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
@@ -196,6 +237,13 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
             )
         }
     }
+}
+
+private fun formatKpVersion(ver: Long): String {
+    val major = (ver shr 16) and 0xFF
+    val minor = (ver shr 8) and 0xFF
+    val patch = ver and 0xFF
+    return "$major.$minor.$patch"
 }
 
 private fun querySelinuxMode(): String {
@@ -218,6 +266,79 @@ private fun querySelinuxMode(): String {
         "1" -> "Enforcing"
         "0" -> "Permissive"
         else -> ge ?: "unknown"
+    }
+}
+
+@Composable
+private fun SuperKeyPromptCard(onOpenSettings: () -> Unit) {
+    ReiCard {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "超级密钥",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "如果您已安装 KP 后端，请输入超级密钥来获得权限。8–63 位，需含字母和数字。请在设置中填写并保存。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                androidx.compose.material3.TextButton(onClick = onOpenSettings) {
+                    Text("去设置")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
+    val key = ReiApplication.superKey
+    var kpReady by remember(key) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(key) {
+        kpReady = if (key.isNotEmpty() && ReiKeyHelper.isValidSuperKey(key)) {
+            withContext(Dispatchers.Default) { ApNatives.ready(key) }
+        } else null
+    }
+    when (kpReady) {
+        true -> {
+            // KP 已就绪：可选显示一行提示或不做任何卡片
+        }
+        false -> {
+            ReiCard {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.padding(4.dp))
+                        Text(
+                            text = "SuperKey 已设置，但 KP 后端未就绪",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "请确认已刷入 KernelPatch/APatch 内核，或检查 SuperKey 是否与设备一致。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = onOpenSettings) {
+                            Text("设置 SuperKey")
+                        }
+                    }
+                }
+            }
+        }
+        null -> { /* 检测中，不显示卡片 */ }
     }
 }
 

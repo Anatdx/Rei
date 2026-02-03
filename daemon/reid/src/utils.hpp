@@ -30,6 +30,9 @@ bool has_magisk();
 int install(const std::optional<std::string>& magiskboot_path);
 int uninstall(const std::optional<std::string>& magiskboot_path);
 
+// Root 实现：ksu = 不创建/移除 apd 硬链接，apatch = 创建 apd 硬链接
+int set_root_impl(const std::string& impl);
+
 // Zip utilities
 uint64_t get_zip_uncompressed_size(const std::string& zip_path);
 

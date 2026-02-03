@@ -64,6 +64,7 @@ import com.anatdx.rei.ui.theme.LocalReiChromeStyle
 import com.anatdx.rei.ui.theme.chromeSurfaceColor
 import com.anatdx.rei.ui.theme.rememberChromeStyleConfig
 import com.anatdx.rei.ui.tools.BootToolsScreen
+import com.anatdx.rei.ui.patches.PatchesScreen
 import kotlinx.coroutines.launch
 
 private sealed class ReiDest(
@@ -140,6 +141,7 @@ fun ReiApp(
         currentRoute == ReiDest.AppAccess.route -> stringResource(R.string.title_app_access)
         currentRoute == "settings/logs" -> stringResource(R.string.title_logs)
         currentRoute == "settings/boot_tools" -> stringResource(R.string.title_boot_tools)
+        currentRoute == "settings/patches" -> "KP 修补"
         else -> stringResource(R.string.app_name)
     }
 
@@ -254,10 +256,14 @@ fun ReiApp(
                             onThemePresetChange = onThemePresetChange,
                             onOpenLogs = { navController.navigate("settings/logs") },
                             onOpenBootTools = { navController.navigate("settings/boot_tools") },
+                            onOpenPatches = { navController.navigate("settings/patches") },
                         )
                     }
                     composable("settings/logs") { LogsScreen() }
                     composable("settings/boot_tools") { BootToolsScreen(rootAccessState) }
+                    composable("settings/patches") {
+                        PatchesScreen(rootGranted = rootAccessState is RootAccessState.Granted)
+                    }
                 }
 
                 if (showPowerMenu) {

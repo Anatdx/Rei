@@ -27,16 +27,22 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +55,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.anatdx.rei.ui.theme.ThemePreset
@@ -61,6 +73,9 @@ import com.anatdx.rei.ui.theme.BackgroundManager
 import com.anatdx.rei.ui.theme.BackgroundPrefs
 import com.anatdx.rei.ui.theme.rememberBackgroundConfig
 import com.anatdx.rei.ui.theme.rememberChromeStyleConfig
+import com.anatdx.rei.ReiApplication
+import com.anatdx.rei.core.auth.ReiKeyHelper
+import com.anatdx.rei.core.reid.ReidClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,6 +91,7 @@ fun SettingsScreen(
     onThemePresetChange: (ThemePreset) -> Unit,
     onOpenLogs: () -> Unit,
     onOpenBootTools: () -> Unit,
+    onOpenPatches: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp),
@@ -84,9 +100,18 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(4.dp)) }
 
         item {
+            SuperkeyCard()
+        }
+
+        item {
+            RootImplCard()
+        }
+
+        item {
             ManageCard(
                 onOpenLogs = onOpenLogs,
                 onOpenBootTools = onOpenBootTools,
+                onOpenPatches = onOpenPatches,
             )
         }
 
@@ -303,15 +328,182 @@ private fun AppearanceCard(
 }
 
 @Composable
+private fun RootImplCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val rootImpl = ReiApplication.rootImplementation
+
+    ReiCard {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            ListItem(
+                headlineContent = { Text("Root 实现") },
+                supportingContent = {
+                    Text("KernelSU 与 KernelPatch/APatch 二选一：仅创建 ksud 或仅创建 apd 硬链接。")
+                },
+                leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = rootImpl == ReiApplication.VALUE_ROOT_IMPL_KSU,
+                    onClick = {
+                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                ReidClient.exec(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
+                            }
+                        }
+                    },
+                )
+                Text(
+                    "KernelSU",
+                    modifier = Modifier.clickable {
+                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                ReidClient.exec(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
+                            }
+                        }
+                    },
+                )
+                Spacer(Modifier.padding(horizontal = 24.dp))
+                RadioButton(
+                    selected = rootImpl == ReiApplication.VALUE_ROOT_IMPL_APATCH,
+                    onClick = {
+                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                ReidClient.exec(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
+                            }
+                        }
+                    },
+                )
+                Text(
+                    "KernelPatch (APatch)",
+                    modifier = Modifier.clickable {
+                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                ReidClient.exec(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuperkeyCard() {
+    var input by rememberSaveable { mutableStateOf(ReiApplication.superKey) }
+    var keyVisible by rememberSaveable { mutableStateOf(false) }
+    var validationError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    ReiCard {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            ListItem(
+                headlineContent = { Text("APatch SuperKey") },
+                supportingContent = {
+                    Text(
+                        if (ReiApplication.superKey.isNotEmpty())
+                            "已设置（用于 AP/KernelPatch 鉴权）"
+                        else
+                            "如果您已安装 KP 后端，请输入超级密钥来获得权限。8–63 位，需含字母和数字。"
+                    )
+                },
+                leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        validationError = when {
+                            it.isEmpty() -> null
+                            !ReiKeyHelper.isValidSuperKey(it) -> "需 8–63 位且含字母和数字"
+                            else -> null
+                        }
+                    },
+                    label = { Text("SuperKey") },
+                    placeholder = { Text("可选，AP/KP 后端时必填") },
+                    visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.weight(1f),
+                    isError = validationError != null,
+                    supportingText = validationError?.let { { Text(it) } },
+                )
+                Icon(
+                    imageVector = if (keyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = if (keyVisible) "隐藏" else "显示",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .padding(start = 8.dp)
+                        .clickable { keyVisible = !keyVisible },
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                if (ReiApplication.superKey.isNotEmpty()) {
+                    TextButton(onClick = {
+                        ReiApplication.superKey = ""
+                        ReiKeyHelper.clearSuperKey()
+                        input = ""
+                        validationError = null
+                    }) {
+                        Text("清除")
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        if (input.isEmpty()) {
+                            ReiApplication.superKey = ""
+                            ReiKeyHelper.clearSuperKey()
+                            validationError = null
+                            return@TextButton
+                        }
+                        if (!ReiKeyHelper.isValidSuperKey(input)) {
+                            validationError = "需 8–63 位且含字母和数字"
+                            return@TextButton
+                        }
+                        ReiApplication.superKey = input
+                        ReiKeyHelper.writeSuperKey(input)
+                        validationError = null
+                    }
+                ) {
+                    Text("保存")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ManageCard(
     onOpenLogs: () -> Unit,
     onOpenBootTools: () -> Unit,
+    onOpenPatches: () -> Unit = {},
 ) {
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
                 headlineContent = { Text("管理") },
-                supportingContent = { Text("日志 / Boot 工具") },
+                supportingContent = { Text("日志 / Boot 工具 / KP 修补") },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -328,6 +520,14 @@ private fun ManageCard(
                 leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenBootTools),
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            ListItem(
+                headlineContent = { Text("KP 修补") },
+                supportingContent = { Text("KernelPatch kpimg 信息 / 修补入口") },
+                leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
+                trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
+                modifier = Modifier.clickable(onClick = onOpenPatches),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
         }

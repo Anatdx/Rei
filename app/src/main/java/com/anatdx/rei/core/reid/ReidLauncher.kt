@@ -1,6 +1,7 @@
 package com.anatdx.rei.core.reid
 
 import android.content.Context
+import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.root.RootShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,16 +46,18 @@ object ReidLauncher {
                 append("mv -f '${dstReid}.new' \"\$DST_REID\"; ")
                 append("fi; ")
 
-                // ksud and apd are hard links to reid (no backup).
+                // ksud 与 apd 二选一：只创建当前 Root 实现对应的硬链接
+                val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
+                val daemonBin = if (useApd) apd else ksud
                 append("rm -f '").append(ksud).append("' '").append(apd).append("'; ")
-                append("ln -f '").append(dstReid).append("' '").append(ksud).append("'; ")
-                append("ln -f '").append(dstReid).append("' '").append(apd).append("'; ")
+                append("ln -f '").append(dstReid).append("' '").append(daemonBin).append("'; ")
+                append("(restorecon -F '").append(dstReid).append("' '").append(daemonBin).append("' 2>/dev/null || true); ")
 
-                append("(restorecon -F '").append(dstReid).append("' '").append(ksud).append("' '").append(apd).append("' 2>/dev/null || true); ")
-
-                // Make sure kernel recognizes Rei as manager, and allow this UID.
-                append("('").append(ksud).append("' debug set-manager '").append(esc(pkg)).append("' >/dev/null 2>&1 || true); ")
-                append("('").append(ksud).append("' profile set-allow '").append(uid).append("' '").append(esc(pkg)).append("' 1 >/dev/null 2>&1 || true); ")
+                // KSU 时：让内核识别 Rei 为 manager 并允许本 UID
+                if (!useApd) {
+                    append("('").append(ksud).append("' debug set-manager '").append(esc(pkg)).append("' >/dev/null 2>&1 || true); ")
+                    append("('").append(ksud).append("' profile set-allow '").append(uid).append("' '").append(esc(pkg)).append("' 1 >/dev/null 2>&1 || true); ")
+                }
 
                 append("echo OK")
             }

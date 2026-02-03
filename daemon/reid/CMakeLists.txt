@@ -51,7 +51,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
       lua
       URL https://www.lua.org/ftp/lua-5.5.0.tar.gz
       URL_HASH SHA256=57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d
-      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   FetchContent_Populate(lua)
   add_library(lua STATIC
@@ -150,8 +149,6 @@ set(SOURCES
     src/core/hide_bootloader.cpp
     src/flash/flash_ak3.cpp
     src/flash/flash_partition.cpp
-    src/hymo/hymo_utils.cpp
-    src/hymo/mount/hymofs.cpp
     src/binder/murasaki_binder.cpp
     src/binder/murasaki_service.cpp
     src/binder/murasaki_ipc.cpp

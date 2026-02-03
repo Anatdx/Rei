@@ -480,14 +480,19 @@ int install(const std::optional<std::string>& magiskboot_path) {
 
     chmod(REID_DAEMON_PATH, 0755);
 
-    // Create ksud and apd as hard links to reid immediately (don't rely only on ensure_binaries)
+    // ksud 与 apd 二选一：仅根据 root_impl 创建其中一个硬链接
+    auto root_impl = read_file(ROOT_IMPL_CONFIG_PATH);
+    std::string impl = root_impl ? trim(*root_impl) : "";
     unlink(DAEMON_PATH);
-    if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
-        LOGW("Failed to create ksud hard link: %s", strerror(errno));
-    }
     unlink(APD_DAEMON_PATH);
-    if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
-        LOGW("Failed to create apd hard link: %s", strerror(errno));
+    if (impl == "apatch") {
+        if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
+            LOGW("Failed to create apd hard link: %s", strerror(errno));
+        }
+    } else {
+        if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
+            LOGW("Failed to create ksud hard link: %s", strerror(errno));
+        }
     }
 
     // Restore SELinux contexts
@@ -500,14 +505,15 @@ int install(const std::optional<std::string>& magiskboot_path) {
         LOGW("Failed to extract binary assets");
     }
 
-    // Create symlink
+    // Create symlink: /data/adb/ksu/bin/ksud -> 当前使用的二进制（reid 或 ksud/apd）
     if (!ensure_dir_exists(BINARY_DIR)) {
         LOGE("Failed to create %s", BINARY_DIR);
         return 1;
     }
 
     unlink(DAEMON_LINK_PATH);
-    if (symlink(DAEMON_PATH, DAEMON_LINK_PATH) != 0) {
+    const char* link_target = (impl == "apatch") ? REID_DAEMON_PATH : DAEMON_PATH;
+    if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
         LOGW("Failed to create symlink: %s", strerror(errno));
     }
 
@@ -521,6 +527,36 @@ int install(const std::optional<std::string>& magiskboot_path) {
         }
     }
 
+    return 0;
+}
+
+int set_root_impl(const std::string& impl) {
+    if (!ensure_dir_exists(WORKING_DIR)) {
+        LOGE("Failed to create %s", WORKING_DIR);
+        return 1;
+    }
+    if (!write_file(ROOT_IMPL_CONFIG_PATH, impl)) {
+        LOGE("Failed to write %s", ROOT_IMPL_CONFIG_PATH);
+        return 1;
+    }
+    unlink(DAEMON_PATH);
+    unlink(APD_DAEMON_PATH);
+    if (impl == "apatch") {
+        if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
+            LOGW("Failed to create apd hard link: %s", strerror(errno));
+            return 1;
+        }
+    } else {
+        if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
+            LOGW("Failed to create ksud hard link: %s", strerror(errno));
+            return 1;
+        }
+    }
+    unlink(DAEMON_LINK_PATH);
+    const char* link_target = (impl == "apatch") ? REID_DAEMON_PATH : DAEMON_PATH;
+    if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
+        LOGW("Failed to create symlink: %s", strerror(errno));
+    }
     return 0;
 }
 

@@ -7,7 +7,6 @@
 #include "murasaki_binder.hpp"
 #include "../core/ksucalls.hpp"
 #include "../defs.hpp"
-#include "../hymo/mount/hymofs.hpp"
 #include "../log.hpp"
 #include "../sepolicy/sepolicy.hpp"
 #include "../utils.hpp"
@@ -26,8 +25,6 @@
 
 namespace ksud {
 namespace murasaki {
-
-using namespace hymo;
 
 // 系统属性操作（与 Shizuku 兼容层保持一致）
 extern "C" {
@@ -586,14 +583,14 @@ static binder_status_t onTransactHymo(AIBinder* binder, transaction_code_t code,
     }
 
     switch (code) {
-    case 1: {  // int getVersion()
+    case 1: {  // int getVersion() - stub (HymoFS removed)
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeInt32(out, HymoFS::get_protocol_version());
+        BW.AParcel_writeInt32(out, 0);
         return STATUS_OK;
     }
-    case 2: {  // boolean isAvailable()
+    case 2: {  // boolean isAvailable() - stub
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, HymoFS::is_available());
+        BW.AParcel_writeBool(out, false);
         return STATUS_OK;
     }
     case 3: {  // boolean isStealthMode()
@@ -601,73 +598,31 @@ static binder_status_t onTransactHymo(AIBinder* binder, transaction_code_t code,
         BW.AParcel_writeBool(out, g_stealth.load());
         return STATUS_OK;
     }
-    case 10: {  // boolean setStealthMode(boolean enabled)
-        bool enabled = false;
-        BW.AParcel_readBool(in, &enabled);
-        bool ok = HymoFS::set_stealth(enabled);
-        if (ok) {
-            g_stealth.store(enabled);
-        }
+    case 10: {  // boolean setStealthMode(boolean enabled) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, ok);
+        BW.AParcel_writeBool(out, false);
         return STATUS_OK;
     }
-    case 20: {  // int addHideRule(String path)
-        std::string path;
-        BW.readString(in, path);
-        bool ok = HymoFS::hide_path(path);
-        int32_t id = -1;
-        if (ok) {
-            id = g_rule_id.fetch_add(1);
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            g_hide_rules[id] = HymoRuleEntry{.id = id, .a = path, .b = "", .targetUid = 0, .flags = 0};
-        }
+    case 20: {  // int addHideRule(String path) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeInt32(out, id);
+        BW.AParcel_writeInt32(out, -1);
         return STATUS_OK;
     }
-    case 21: {  // int addHideRuleForUid(String path, int targetUid)
-        std::string path;
-        BW.readString(in, path);
-        int32_t targetUid = 0;
-        BW.AParcel_readInt32(in, &targetUid);
-        bool ok = HymoFS::hide_path(path);
-        int32_t id = -1;
-        if (ok) {
-            id = g_rule_id.fetch_add(1);
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            g_hide_rules[id] =
-                HymoRuleEntry{.id = id, .a = path, .b = "", .targetUid = targetUid, .flags = 0};
-        }
+    case 21: {  // int addHideRuleForUid(String path, int targetUid) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeInt32(out, id);
+        BW.AParcel_writeInt32(out, -1);
         return STATUS_OK;
     }
-    case 22: {  // boolean removeHideRule(int ruleId)
-        int32_t ruleId = -1;
-        BW.AParcel_readInt32(in, &ruleId);
-        std::string path;
-        {
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            auto it = g_hide_rules.find(ruleId);
-            if (it != g_hide_rules.end()) {
-                path = it->second.a;
-            }
-        }
-        bool ok = false;
-        if (!path.empty()) {
-            ok = HymoFS::delete_rule(path);
-            if (ok) {
-                std::lock_guard<std::mutex> lock(g_rules_mutex);
-                g_hide_rules.erase(ruleId);
-            }
-        }
+    case 22: {  // boolean removeHideRule(int ruleId) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, ok);
+        BW.AParcel_writeBool(out, false);
         return STATUS_OK;
     }
-    case 23: {  // void clearHideRules()
-        (void)HymoFS::clear_rules();
+    case 23: {  // void clearHideRules() - stub
         std::lock_guard<std::mutex> lock(g_rules_mutex);
         g_hide_rules.clear();
         g_redirect_rules.clear();
@@ -684,68 +639,25 @@ static binder_status_t onTransactHymo(AIBinder* binder, transaction_code_t code,
         }
         return STATUS_OK;
     }
-    case 30: {  // int addRedirectRule(String sourcePath, String targetPath, int flags)
-        std::string src, dst;
-        BW.readString(in, src);
-        BW.readString(in, dst);
-        int32_t flags = 0;
-        BW.AParcel_readInt32(in, &flags);
-        bool ok = HymoFS::add_rule(src, dst, 0);
-        int32_t id = -1;
-        if (ok) {
-            id = g_rule_id.fetch_add(1);
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            g_redirect_rules[id] = HymoRuleEntry{.id = id, .a = src, .b = dst, .targetUid = 0, .flags = flags};
-        }
+    case 30: {  // int addRedirectRule(...) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeInt32(out, id);
+        BW.AParcel_writeInt32(out, -1);
         return STATUS_OK;
     }
-    case 31: {  // int addRedirectRuleForUid(String sourcePath, String targetPath, int targetUid, int flags)
-        std::string src, dst;
-        BW.readString(in, src);
-        BW.readString(in, dst);
-        int32_t targetUid = 0;
-        int32_t flags = 0;
-        BW.AParcel_readInt32(in, &targetUid);
-        BW.AParcel_readInt32(in, &flags);
-        bool ok = HymoFS::add_rule(src, dst, 0);
-        int32_t id = -1;
-        if (ok) {
-            id = g_rule_id.fetch_add(1);
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            g_redirect_rules[id] =
-                HymoRuleEntry{.id = id, .a = src, .b = dst, .targetUid = targetUid, .flags = flags};
-        }
+    case 31: {  // int addRedirectRuleForUid(...) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeInt32(out, id);
+        BW.AParcel_writeInt32(out, -1);
         return STATUS_OK;
     }
-    case 32: {  // boolean removeRedirectRule(int ruleId)
-        int32_t ruleId = -1;
-        BW.AParcel_readInt32(in, &ruleId);
-        std::string src;
-        {
-            std::lock_guard<std::mutex> lock(g_rules_mutex);
-            auto it = g_redirect_rules.find(ruleId);
-            if (it != g_redirect_rules.end()) {
-                src = it->second.a;
-            }
-        }
-        bool ok = false;
-        if (!src.empty()) {
-            ok = HymoFS::delete_rule(src);
-            if (ok) {
-                std::lock_guard<std::mutex> lock(g_rules_mutex);
-                g_redirect_rules.erase(ruleId);
-            }
-        }
+    case 32: {  // boolean removeRedirectRule(int ruleId) - stub
+        (void)in;
         WRITE_NO_EXCEPTION();
-        BW.AParcel_writeBool(out, ok);
+        BW.AParcel_writeBool(out, false);
         return STATUS_OK;
     }
-    case 33: {  // void clearRedirectRules()
-        (void)HymoFS::clear_rules();
+    case 33: {  // void clearRedirectRules() - stub
         std::lock_guard<std::mutex> lock(g_rules_mutex);
         g_hide_rules.clear();
         g_redirect_rules.clear();
