@@ -73,8 +73,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/29.0.14206865
           ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/29.0.14206865
         run: |
-          echo 'org.gradle.parallel=true' >> gradle.properties
-          echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
+          printf '\norg.gradle.parallel=true\norg.gradle.jvmargs=-Xmx2048m\n' >> gradle.properties
           ./gradlew clean assembleDebug assembleRelease
 
       - name: Sign Release
