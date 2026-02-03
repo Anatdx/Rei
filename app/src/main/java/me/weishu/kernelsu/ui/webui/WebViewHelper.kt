@@ -17,14 +17,13 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
+import com.topjohnwu.superuser.ShellUtils
+import com.topjohnwu.superuser.io.SuFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.util.createRootShell
-import me.weishu.kernelsu.ui.viewmodel.ModuleViewModel
-import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
+import org.json.JSONArray
 import java.io.File
-
 
 @SuppressLint("SetJavaScriptEnabled")
 internal suspend fun prepareWebView(
@@ -33,44 +32,57 @@ internal suspend fun prepareWebView(
     webUIState: WebUIState,
 ) {
     withContext(Dispatchers.IO) {
-        val viewModel = ModuleViewModel()
-        if (viewModel.moduleList.isEmpty()) {
-            viewModel.loadModuleList()
-        }
+        webUIState.modDir = "/data/adb/modules/$moduleId"
 
-        val moduleInfo = viewModel.moduleList.find { info -> info.id == moduleId }
-
-        if (moduleInfo == null) {
-            withContext(Dispatchers.Main) {
-                webUIState.uiEvent = WebUIEvent.Error(activity.getString(R.string.no_such_module, moduleId))
-            }
-            return@withContext
-        }
-
-        if (!moduleInfo.hasWebUi || !moduleInfo.enabled || moduleInfo.update || moduleInfo.remove) {
-            withContext(Dispatchers.Main) {
-                webUIState.uiEvent = WebUIEvent.Error(activity.getString(R.string.module_unavailable, moduleInfo.name))
-            }
-            return@withContext
-        }
-
-        webUIState.moduleName = moduleInfo.name
-        webUIState.modDir = "/data/adb/modules/${moduleId}"
-
-        if (SuperUserViewModel.apps.isEmpty()) {
-            SuperUserViewModel().fetchAppList()
-        }
         val shell = createRootShell(true)
         webUIState.rootShell = shell
 
+        val moduleListJson = runCatching {
+            ShellUtils.fastCmd(
+                shell,
+                "sh",
+                "-c",
+                "if [ -x /data/adb/ksud ]; then /data/adb/ksud module list; "
+                    + "elif [ -x /data/adb/reid ]; then /data/adb/reid module list; "
+                    + "else echo '[]'; fi",
+            )
+        }.getOrDefault("[]").trim()
+
+        val moduleInfo = runCatching {
+            val arr = JSONArray(moduleListJson)
+            (0 until arr.length()).asSequence()
+                .mapNotNull { arr.optJSONObject(it) }
+                .firstOrNull { it.optString("id") == moduleId }
+        }.getOrNull()
+
+        val name = moduleInfo?.optString("name")?.ifBlank { moduleId } ?: moduleId
+        val enabled = moduleInfo?.optBoolean("enabled", true) ?: true
+        val update = moduleInfo?.optBoolean("update", false) ?: false
+        val remove = moduleInfo?.optBoolean("remove", false) ?: false
+
+        val webRoot = File("${webUIState.modDir}/webroot")
+        val hasWebUi = runCatching {
+            val f = SuFile(File(webRoot, "index.html").absolutePath).apply { setShell(shell) }
+            f.exists()
+        }.getOrDefault(false)
+
+        if (!hasWebUi || !enabled || update || remove) {
+            withContext(Dispatchers.Main) {
+                webUIState.uiEvent = WebUIEvent.Error("Module is unavailable or has no WebUI: $name")
+            }
+            runCatching { shell.close() }
+            return@withContext
+        }
+
+        webUIState.moduleName = name
+
         withContext(Dispatchers.Main) {
+            val label = "Rei - $name"
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 @Suppress("DEPRECATION")
-                activity.setTaskDescription(ActivityManager.TaskDescription("KernelSU - ${moduleInfo.name}"))
+                activity.setTaskDescription(ActivityManager.TaskDescription(label))
             } else {
-                val taskDescription = ActivityManager.TaskDescription.Builder()
-                    .setLabel("KernelSU - ${moduleInfo.name}")
-                    .build()
+                val taskDescription = ActivityManager.TaskDescription.Builder().setLabel(label).build()
                 activity.setTaskDescription(taskDescription)
             }
 
@@ -86,16 +98,20 @@ internal suspend fun prepareWebView(
                 allowFileAccess = false
             }
 
-            val webRoot = File("${webUIState.modDir}/webroot")
             val webViewAssetLoader = WebViewAssetLoader.Builder()
                 .setDomain("mui.kernelsu.org")
                 .addPathHandler(
                     "/",
-                    SuFilePathHandler(activity, webRoot, shell, { webUIState.currentInsets }, { enable -> webUIState.isInsetsEnabled = enable })
+                    SuFilePathHandler(
+                        activity,
+                        webRoot,
+                        shell,
+                        { webUIState.currentInsets },
+                        { enable -> webUIState.isInsetsEnabled = enable },
+                    ),
                 )
                 .build()
 
-            // WebViewClient
             webView.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                     val url = request.url
@@ -120,46 +136,45 @@ internal suspend fun prepareWebView(
                 }
             }
 
-            // WebChromeClient
             webView.webChromeClient = object : WebChromeClient() {
                 override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
-                    if (message == null || result == null) return false
-                    webUIState.uiEvent = WebUIEvent.ShowAlert(message, result)
+                    if (result == null) return false
+                    webUIState.uiEvent = WebUIEvent.ShowAlert(message.orEmpty(), result)
                     return true
                 }
 
                 override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
-                    if (message == null || result == null) return false
-                    webUIState.uiEvent = WebUIEvent.ShowConfirm(message, result)
+                    if (result == null) return false
+                    webUIState.uiEvent = WebUIEvent.ShowConfirm(message.orEmpty(), result)
                     return true
                 }
 
-                override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult?): Boolean {
-                    if (message == null || result == null || defaultValue == null) return false
-                    webUIState.uiEvent = WebUIEvent.ShowPrompt(message, defaultValue, result)
+                override fun onJsPrompt(
+                    view: WebView?,
+                    url: String?,
+                    message: String?,
+                    defaultValue: String?,
+                    result: JsPromptResult?,
+                ): Boolean {
+                    if (result == null) return false
+                    webUIState.uiEvent = WebUIEvent.ShowPrompt(message.orEmpty(), defaultValue.orEmpty(), result)
                     return true
                 }
 
                 override fun onShowFileChooser(
-                    webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?,
                 ): Boolean {
-                    webUIState.filePathCallback?.onReceiveValue(null)
+                    val intent = fileChooserParams?.createIntent() ?: return false
                     webUIState.filePathCallback = filePathCallback
-
-                    val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply { type = "*/*" }
-                    if (fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
-                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                    }
                     webUIState.uiEvent = WebUIEvent.ShowFileChooser(intent)
                     return true
                 }
             }
 
-            // JS Interface
-            val webviewInterface = WebViewInterface(webUIState)
             webUIState.webView = webView
-            webView.addJavascriptInterface(webviewInterface, "ksu")
-            webUIState.uiEvent = WebUIEvent.WebViewReady
+            webView.addJavascriptInterface(WebViewInterface(webUIState), "ksu")
         }
     }
 }

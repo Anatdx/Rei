@@ -1,15 +1,11 @@
 package me.weishu.kernelsu.ui.webui
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * @author rifsxd
- * @date 2025/6/2.
- */
 object MonetColorsProvider {
 
     private val colorsCss: AtomicReference<String?> = AtomicReference(null)
@@ -20,57 +16,44 @@ object MonetColorsProvider {
 
     @Composable
     fun UpdateCss() {
-        val colorScheme = MiuixTheme.colorScheme
+        val colorScheme = MaterialTheme.colorScheme
 
         LaunchedEffect(colorScheme) {
-            // Generate CSS only when colorScheme changes
             val monetColors = mapOf(
-                // App Base Colors
                 "primary" to colorScheme.primary.toCssValue(),
                 "onPrimary" to colorScheme.onPrimary.toCssValue(),
                 "primaryContainer" to colorScheme.primaryContainer.toCssValue(),
                 "onPrimaryContainer" to colorScheme.onPrimaryContainer.toCssValue(),
-                "inversePrimary" to colorScheme.primaryVariant.toCssValue(),
+                "inversePrimary" to colorScheme.inversePrimary.toCssValue(),
                 "secondary" to colorScheme.secondary.toCssValue(),
                 "onSecondary" to colorScheme.onSecondary.toCssValue(),
                 "secondaryContainer" to colorScheme.secondaryContainer.toCssValue(),
                 "onSecondaryContainer" to colorScheme.onSecondaryContainer.toCssValue(),
-                "tertiary" to colorScheme.tertiaryContainerVariant.toCssValue(),
-                "onTertiary" to colorScheme.tertiaryContainer.toCssValue(),
+                "tertiary" to colorScheme.tertiary.toCssValue(),
+                "onTertiary" to colorScheme.onTertiary.toCssValue(),
                 "tertiaryContainer" to colorScheme.tertiaryContainer.toCssValue(),
                 "onTertiaryContainer" to colorScheme.onTertiaryContainer.toCssValue(),
                 "background" to colorScheme.background.toCssValue(),
                 "onBackground" to colorScheme.onBackground.toCssValue(),
                 "surface" to colorScheme.surface.toCssValue(),
-                "tonalSurface" to colorScheme.surfaceContainer.toCssValue(),
                 "onSurface" to colorScheme.onSurface.toCssValue(),
                 "surfaceVariant" to colorScheme.surfaceVariant.toCssValue(),
-                "onSurfaceVariant" to colorScheme.onSurfaceVariantSummary.toCssValue(),
-                "surfaceTint" to colorScheme.surface.toCssValue(),
-                "inverseSurface" to colorScheme.disabledOnSurface.toCssValue(),
-                "inverseOnSurface" to colorScheme.surfaceContainer.toCssValue(),
+                "onSurfaceVariant" to colorScheme.onSurfaceVariant.toCssValue(),
+                "surfaceTint" to colorScheme.surfaceTint.toCssValue(),
+                "inverseSurface" to colorScheme.inverseSurface.toCssValue(),
+                "inverseOnSurface" to colorScheme.inverseOnSurface.toCssValue(),
                 "error" to colorScheme.error.toCssValue(),
                 "onError" to colorScheme.onError.toCssValue(),
                 "errorContainer" to colorScheme.errorContainer.toCssValue(),
                 "onErrorContainer" to colorScheme.onErrorContainer.toCssValue(),
                 "outline" to colorScheme.outline.toCssValue(),
-                "outlineVariant" to colorScheme.dividerLine.toCssValue(),
-                "scrim" to colorScheme.windowDimming.toCssValue(),
-                "surfaceBright" to colorScheme.surface.toCssValue(),
-                "surfaceDim" to colorScheme.surface.toCssValue(),
+                "outlineVariant" to colorScheme.outlineVariant.toCssValue(),
+                "scrim" to colorScheme.scrim.toCssValue(),
                 "surfaceContainer" to colorScheme.surfaceContainer.toCssValue(),
                 "surfaceContainerHigh" to colorScheme.surfaceContainerHigh.toCssValue(),
                 "surfaceContainerHighest" to colorScheme.surfaceContainerHighest.toCssValue(),
-                "surfaceContainerLow" to colorScheme.surfaceContainer.toCssValue(),
-                "surfaceContainerLowest" to colorScheme.surfaceContainer.toCssValue(),
-                "filledTonalButtonContentColor" to colorScheme.onPrimaryContainer.toCssValue(),
-                "filledTonalButtonContainerColor" to colorScheme.secondaryContainer.toCssValue(),
-                "filledTonalButtonDisabledContentColor" to colorScheme.onSurfaceVariantSummary.toCssValue(),
-                "filledTonalButtonDisabledContainerColor" to colorScheme.surfaceVariant.toCssValue(),
-                "filledCardContentColor" to colorScheme.onPrimaryContainer.toCssValue(),
-                "filledCardContainerColor" to colorScheme.primaryContainer.toCssValue(),
-                "filledCardDisabledContentColor" to colorScheme.onSurfaceVariantSummary.toCssValue(),
-                "filledCardDisabledContainerColor" to colorScheme.surfaceVariant.toCssValue()
+                "surfaceContainerLow" to colorScheme.surfaceContainerLow.toCssValue(),
+                "surfaceContainerLowest" to colorScheme.surfaceContainerLowest.toCssValue(),
             )
 
             colorsCss.set(monetColors.toCssVars())
@@ -88,9 +71,7 @@ object MonetColorsProvider {
     }
 
     private fun Color.toCssValue(): String {
-        fun Float.toHex(): String {
-            return (this * 255).toInt().coerceIn(0, 255).toString(16).padStart(2, '0')
-        }
+        fun Float.toHex(): String = (this * 255).toInt().coerceIn(0, 255).toString(16).padStart(2, '0')
         return if (alpha == 1f) {
             "#${red.toHex()}${green.toHex()}${blue.toHex()}"
         } else {

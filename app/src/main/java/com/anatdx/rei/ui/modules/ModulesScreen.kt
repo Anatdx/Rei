@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Refresh
@@ -49,6 +50,7 @@ import com.anatdx.rei.core.io.UriFiles
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.ui.components.ReiCard
+import me.weishu.kernelsu.ui.webui.WebUIActivity
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -276,6 +278,17 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                            IconButton(
+                                enabled = canUseRoot() && !loading && m.enabled && !m.update && !m.remove,
+                                onClick = {
+                                    val it = android.content.Intent(ctx, WebUIActivity::class.java)
+                                        .putExtra("id", m.id)
+                                    ctx.startActivity(it)
+                                },
+                            ) {
+                                Icon(Icons.Outlined.Language, contentDescription = "WebUI")
+                            }
+
                             IconButton(
                                 enabled = canUseRoot() && !loading,
                                 onClick = {

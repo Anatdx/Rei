@@ -313,6 +313,10 @@ dependencies {
     implementation(project(":murasaki-api:provider"))
 
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // KernelSU WebUI integration (imports upstream sources)
+    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("com.github.topjohnwu.libsu:core:6.0.0")
+    implementation("com.github.topjohnwu.libsu:io:6.0.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -11,24 +11,18 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import me.weishu.kernelsu.ui.theme.KernelSUTheme
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
+import com.anatdx.rei.ui.theme.ReiTheme
 
 @SuppressLint("SetJavaScriptEnabled")
 class WebUIActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-
-        // Enable edge to edge
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -37,16 +31,7 @@ class WebUIActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val prefs = LocalContext.current.getSharedPreferences("settings", MODE_PRIVATE)
-            var colorMode by remember { mutableIntStateOf(prefs.getInt("color_mode", 0)) }
-            var keyColorInt by remember { mutableIntStateOf(prefs.getInt("key_color", 0)) }
-            val keyColor =
-                remember(keyColorInt) {
-                    if (keyColorInt == 0) null else androidx.compose.ui.graphics.Color(
-                        keyColorInt
-                    )
-                }
-            KernelSUTheme(colorMode = colorMode, keyColor = keyColor) {
+            ReiTheme {
                 MainContent(activity = this, onFinish = { finish() })
             }
         }
@@ -57,7 +42,6 @@ class WebUIActivity : ComponentActivity() {
 private fun MainContent(activity: ComponentActivity, onFinish: () -> Unit) {
     val moduleId = remember { activity.intent.getStringExtra("id") }
     val webUIState = remember { WebUIState() }
-
 
     LaunchedEffect(moduleId) {
         if (moduleId == null) {
@@ -83,14 +67,15 @@ private fun MainContent(activity: ComponentActivity, onFinish: () -> Unit) {
             LaunchedEffect(event) { onFinish() }
         }
 
-        else -> {}
+        else -> Unit
     }
+
     val isLoading = webUIState.uiEvent is WebUIEvent.Loading
 
     Crossfade(targetState = isLoading, animationSpec = tween(300)) { loading ->
         if (loading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                InfiniteProgressIndicator()
+                CircularProgressIndicator()
             }
         } else {
             WebUIScreen(webUIState = webUIState)
