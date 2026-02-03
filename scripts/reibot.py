@@ -94,7 +94,8 @@ async def main():
     session_str = os.environ.get("SESSION_STRING") or ""
     async with TelegramClient(
         StringSession(session_str), API_ID, API_HASH
-    ).start(bot_token=BOT_TOKEN) as bot:
+    ) as bot:
+        await bot.start(bot_token=BOT_TOKEN)
         caption = [""] * len(files)
         caption[-1] = get_caption()
         print("[+] Caption: ")
