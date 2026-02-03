@@ -355,7 +355,7 @@ private fun RootImplCard() {
                         ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                ReidClient.exec(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
+                                ReidClient.execReid(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
                             }
                         }
                     },
@@ -366,7 +366,7 @@ private fun RootImplCard() {
                         ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                ReidClient.exec(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
+                                ReidClient.execReid(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
                             }
                         }
                     },
@@ -378,7 +378,7 @@ private fun RootImplCard() {
                         ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                ReidClient.exec(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
+                                ReidClient.execReid(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
                             }
                         }
                     },
@@ -389,7 +389,7 @@ private fun RootImplCard() {
                         ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                ReidClient.exec(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
+                                ReidClient.execReid(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
                             }
                         }
                     },

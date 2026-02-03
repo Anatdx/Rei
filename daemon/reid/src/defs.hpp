@@ -34,6 +34,9 @@ constexpr const char* APD_DAEMON_PATH = "/data/adb/apd";
 constexpr const char* ROOT_IMPL_CONFIG_PATH = "/data/adb/ksu/root_impl";
 constexpr const char* MAGISKBOOT_PATH = "/data/adb/ksu/bin/magiskboot";
 constexpr const char* DAEMON_LINK_PATH = "/data/adb/ksu/bin/ksud";
+constexpr const char* REI_DIR = "/data/adb/rei";
+constexpr const char* REI_KSUD_BAK = "/data/adb/rei/ksud.bak";
+constexpr const char* REI_APD_BAK = "/data/adb/rei/apd.bak";
 
 constexpr const char* MODULE_DIR = "/data/adb/modules/";
 constexpr const char* MODULE_UPDATE_DIR = "/data/adb/modules_update/";

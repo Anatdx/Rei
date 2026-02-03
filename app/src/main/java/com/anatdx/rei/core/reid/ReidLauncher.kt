@@ -46,12 +46,20 @@ object ReidLauncher {
                 append("mv -f '${dstReid}.new' \"\$DST_REID\"; ")
                 append("fi; ")
 
-                // ksud 与 apd 二选一：只创建当前 Root 实现对应的硬链接
+                // ksud/apd 二选一：不活跃的移到 /data/adb/rei/*.bak，切换时移回，避免 rm 丢 root
                 val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
+                val reiDir = "/data/adb/rei"
+                append("mkdir -p '").append(reiDir).append("'; ")
+                if (useApd) {
+                    append("[ -f '").append(ksud).append("' ] && mv -f '").append(ksud).append("' '").append(reiDir).append("/ksud.bak'; ")
+                    append("[ -f '").append(reiDir).append("/apd.bak' ] && mv -f '").append(reiDir).append("/apd.bak' '").append(apd).append("' || ln -f '").append(dstReid).append("' '").append(apd).append("'; ")
+                } else {
+                    append("[ -f '").append(apd).append("' ] && mv -f '").append(apd).append("' '").append(reiDir).append("/apd.bak'; ")
+                    append("[ -f '").append(reiDir).append("/ksud.bak' ] && mv -f '").append(reiDir).append("/ksud.bak' '").append(ksud).append("' || ln -f '").append(dstReid).append("' '").append(ksud).append("'; ")
+                }
                 val daemonBin = if (useApd) apd else ksud
-                append("rm -f '").append(ksud).append("' '").append(apd).append("'; ")
-                append("ln -f '").append(dstReid).append("' '").append(daemonBin).append("'; ")
                 append("(restorecon -F '").append(dstReid).append("' '").append(daemonBin).append("' 2>/dev/null || true); ")
+                append("mkdir -p /data/adb/ksu/bin; ln -sf '").append(daemonBin).append("' /data/adb/ksu/bin/ksud; ")
 
                 // KSU 时：让内核识别 Rei 为 manager 并允许本 UID
                 if (!useApd) {

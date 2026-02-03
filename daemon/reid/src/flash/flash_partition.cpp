@@ -9,7 +9,7 @@
 #include <sstream>  // for std::istringstream
 #include <string>
 #include <vector>
-#include "../boot/tools.hpp"
+#include "ksud/boot/tools.hpp"
 #include "../log.hpp"
 #include "../utils.hpp"
 #include "picosha2.h"

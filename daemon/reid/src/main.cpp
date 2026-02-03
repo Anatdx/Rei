@@ -19,18 +19,22 @@ static std::string get_self_path() {
 }
 #endif
 
-static bool is_apd_invocation(const std::string& path) {
-    if (path.empty()) return false;
+static std::string get_exe_basename(const std::string& path) {
+    if (path.empty()) return {};
     size_t last = path.rfind('/');
-    std::string base = (last != std::string::npos) ? path.substr(last + 1) : path;
-    return base == "apd";
+    return (last != std::string::npos) ? path.substr(last + 1) : path;
 }
 
 int main(int argc, char* argv[]) {
     std::string exe = get_self_path();
-    if (!exe.empty() && is_apd_invocation(exe)) {
+    std::string base = get_exe_basename(exe);
+
+    if (base == "apd") {
         apd::InitLog();
         return apd::RunCli(argc, argv);
     }
-    return ksud::cli_run(argc, argv);
+    if (base == "reid") {
+        return ksud::reid_cli_run(argc, argv);
+    }
+    return ksud::ksud_cli_run(argc, argv);
 }

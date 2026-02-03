@@ -130,29 +130,30 @@ set(SOURCES
     src/defs.cpp
     src/log.cpp
     src/utils.cpp
-    src/core/ksucalls.cpp
-    src/core/feature.cpp
     src/core/restorecon.cpp
     src/core/assets.cpp
-    src/module/module.cpp
-    src/module/module_config.cpp
-    src/module/metamodule.cpp
-    src/boot/boot_patch.cpp
-    src/boot/tools.cpp
-    src/boot/apk_sign.cpp
-    src/profile/profile.cpp
-    src/sepolicy/sepolicy.cpp
-    src/su.cpp
-    src/init_event.cpp
-    src/umount.cpp
-    src/debug.cpp
     src/core/hide_bootloader.cpp
     src/flash/flash_ak3.cpp
     src/flash/flash_partition.cpp
+    src/init_event.cpp
     src/binder/murasaki_binder.cpp
     src/binder/murasaki_service.cpp
     src/binder/murasaki_ipc.cpp
     src/binder/shizuku_service.cpp
+    src/ksud/ksucalls.cpp
+    src/ksud/feature.cpp
+    src/ksud/debug.cpp
+    src/ksud/su.cpp
+    src/ksud/umount.cpp
+    src/ksud/ksud_cli.cpp
+    src/ksud/module/module.cpp
+    src/ksud/module/module_config.cpp
+    src/ksud/module/metamodule.cpp
+    src/ksud/boot/boot_patch.cpp
+    src/ksud/boot/tools.cpp
+    src/ksud/boot/apk_sign.cpp
+    src/ksud/profile/profile.cpp
+    src/ksud/sepolicy/sepolicy.cpp
     ${ASSETS_CPP}
 )
 
@@ -176,7 +177,7 @@ else()
   target_include_directories(reid_apd PUBLIC ${CMAKE_SOURCE_DIR}/src)
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/src/ksud ${CMAKE_SOURCE_DIR}/src)
 include_directories(${picosha2_SOURCE_DIR})
 include_directories(${miniz_SOURCE_DIR})
 include_directories(${GENERATED_DIR})

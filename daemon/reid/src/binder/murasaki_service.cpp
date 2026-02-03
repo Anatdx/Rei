@@ -2,12 +2,12 @@
 // KernelSU 内核级 API 服务端
 
 #include "murasaki_service.hpp"
-#include "../core/ksucalls.hpp"
+#include "../ksud/ksucalls.hpp"
 #include "../defs.hpp"
 #include "../log.hpp"
-#include "../profile/profile.hpp"
-#include "../sepolicy/sepolicy.hpp"
-#include "../umount.hpp"
+#include "../ksud/profile/profile.hpp"
+#include "../ksud/sepolicy/sepolicy.hpp"
+#include "umount.hpp"
 
 #include <poll.h>
 #include <sys/socket.h>

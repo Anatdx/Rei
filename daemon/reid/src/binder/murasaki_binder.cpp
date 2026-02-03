@@ -5,10 +5,10 @@
 #ifdef __ANDROID__
 
 #include "murasaki_binder.hpp"
-#include "../core/ksucalls.hpp"
+#include "../ksud/ksucalls.hpp"
 #include "../defs.hpp"
 #include "../log.hpp"
-#include "../sepolicy/sepolicy.hpp"
+#include "../ksud/sepolicy/sepolicy.hpp"
 #include "../utils.hpp"
 #include "binder_wrapper.hpp"
 #include "shizuku_service.hpp"

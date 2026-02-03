@@ -8,7 +8,13 @@
 
 namespace ksud {
 
-int cli_run(int argc, char* argv[]);
+/** Rei 本体入口：仅 reid 专属功能（daemon/murasaki、set-root-impl、version、help） */
+int reid_cli_run(int argc, char* argv[]);
+/** KernelSU 兼容入口：ksud 次级，完整 KSU 命令集 */
+int ksud_cli_run(int argc, char* argv[]);
+
+/** 打印版本（reid/ksud 共用） */
+void print_version();
 
 // Command handler type
 using CommandHandler = std::function<int(const std::vector<std::string>&)>;

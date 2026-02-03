@@ -2,7 +2,7 @@
 // 直接用 libbinder_ndk 实现完整的 IShizukuService
 
 #include "shizuku_service.hpp"
-#include "../core/ksucalls.hpp"
+#include "../ksud/ksucalls.hpp"
 #include "../log.hpp"
 #include "binder_wrapper.hpp"
 

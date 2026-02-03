@@ -1,7 +1,7 @@
 #include "utils.hpp"
-#include "boot/boot_patch.hpp"
+#include "ksud/boot/boot_patch.hpp"
 #include "core/assets.hpp"
-#include "core/ksucalls.hpp"
+#include "ksud/ksucalls.hpp"
 #include "core/restorecon.hpp"
 #include "defs.hpp"
 #include "log.hpp"
@@ -480,17 +480,29 @@ int install(const std::optional<std::string>& magiskboot_path) {
 
     chmod(REID_DAEMON_PATH, 0755);
 
-    // ksud 与 apd 二选一：仅根据 root_impl 创建其中一个硬链接
+    // ksud/apd 二选一：不活跃的移到 /data/adb/rei/*.bak，切换时移回，避免 unlink 丢 root
+    if (!ensure_dir_exists(REI_DIR)) {
+        LOGE("Failed to create %s", REI_DIR);
+        return 1;
+    }
     auto root_impl = read_file(ROOT_IMPL_CONFIG_PATH);
     std::string impl = root_impl ? trim(*root_impl) : "";
-    unlink(DAEMON_PATH);
-    unlink(APD_DAEMON_PATH);
     if (impl == "apatch") {
-        if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
+        if (std::filesystem::exists(DAEMON_PATH)) {
+            std::filesystem::rename(DAEMON_PATH, REI_KSUD_BAK);
+        }
+        if (std::filesystem::exists(REI_APD_BAK)) {
+            std::filesystem::rename(REI_APD_BAK, APD_DAEMON_PATH);
+        } else if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
             LOGW("Failed to create apd hard link: %s", strerror(errno));
         }
     } else {
-        if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
+        if (std::filesystem::exists(APD_DAEMON_PATH)) {
+            std::filesystem::rename(APD_DAEMON_PATH, REI_APD_BAK);
+        }
+        if (std::filesystem::exists(REI_KSUD_BAK)) {
+            std::filesystem::rename(REI_KSUD_BAK, DAEMON_PATH);
+        } else if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
             LOGW("Failed to create ksud hard link: %s", strerror(errno));
         }
     }
@@ -512,7 +524,7 @@ int install(const std::optional<std::string>& magiskboot_path) {
     }
 
     unlink(DAEMON_LINK_PATH);
-    const char* link_target = (impl == "apatch") ? REID_DAEMON_PATH : DAEMON_PATH;
+    const char* link_target = (impl == "apatch") ? APD_DAEMON_PATH : DAEMON_PATH;
     if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
         LOGW("Failed to create symlink: %s", strerror(errno));
     }
@@ -535,25 +547,38 @@ int set_root_impl(const std::string& impl) {
         LOGE("Failed to create %s", WORKING_DIR);
         return 1;
     }
+    if (!ensure_dir_exists(REI_DIR)) {
+        LOGE("Failed to create %s", REI_DIR);
+        return 1;
+    }
     if (!write_file(ROOT_IMPL_CONFIG_PATH, impl)) {
         LOGE("Failed to write %s", ROOT_IMPL_CONFIG_PATH);
         return 1;
     }
-    unlink(DAEMON_PATH);
-    unlink(APD_DAEMON_PATH);
+    // Move inactive to /data/adb/rei/*.bak, move active back from rei; no unlink of active
     if (impl == "apatch") {
-        if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
+        if (std::filesystem::exists(DAEMON_PATH)) {
+            std::filesystem::rename(DAEMON_PATH, REI_KSUD_BAK);
+        }
+        if (std::filesystem::exists(REI_APD_BAK)) {
+            std::filesystem::rename(REI_APD_BAK, APD_DAEMON_PATH);
+        } else if (link(REID_DAEMON_PATH, APD_DAEMON_PATH) != 0) {
             LOGW("Failed to create apd hard link: %s", strerror(errno));
             return 1;
         }
     } else {
-        if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
+        if (std::filesystem::exists(APD_DAEMON_PATH)) {
+            std::filesystem::rename(APD_DAEMON_PATH, REI_APD_BAK);
+        }
+        if (std::filesystem::exists(REI_KSUD_BAK)) {
+            std::filesystem::rename(REI_KSUD_BAK, DAEMON_PATH);
+        } else if (link(REID_DAEMON_PATH, DAEMON_PATH) != 0) {
             LOGW("Failed to create ksud hard link: %s", strerror(errno));
             return 1;
         }
     }
     unlink(DAEMON_LINK_PATH);
-    const char* link_target = (impl == "apatch") ? REID_DAEMON_PATH : DAEMON_PATH;
+    const char* link_target = (impl == "apatch") ? APD_DAEMON_PATH : DAEMON_PATH;
     if (symlink(link_target, DAEMON_LINK_PATH) != 0) {
         LOGW("Failed to create symlink: %s", strerror(errno));
     }
@@ -582,6 +607,7 @@ int uninstall(const std::optional<std::string>& magiskboot_path) {
     std::filesystem::remove(DAEMON_PATH);
     std::filesystem::remove(APD_DAEMON_PATH);
     std::filesystem::remove(REID_DAEMON_PATH);
+    std::filesystem::remove_all(REI_DIR);
     std::filesystem::remove_all(MODULE_DIR);
 
     printf("- Restore boot image..\n");

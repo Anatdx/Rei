@@ -49,12 +49,24 @@ object ReidClient {
         }
     }
 
+    /** 使用 reid 本体执行（用于 set-root-impl 等 reid 专属命令） */
+    suspend fun execReid(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
+        return withContext(Dispatchers.IO) {
+            val escapedArgs = args.joinToString(" ") { shellEscape(it) }
+            val cmd = "sh -c 'if [ -x /data/adb/reid ]; then /data/adb/reid $escapedArgs; else echo no_reid; exit 127; fi'"
+            runShellSu(cmd, context, args, timeoutMs)
+        }
+    }
+
     suspend fun exec(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
             val escapedArgs = args.joinToString(" ") { shellEscape(it) }
             val cmd = buildString {
                 append("sh -c '")
                 append("if [ -x /data/adb/ksud ]; then /data/adb/ksud ")
+                append(escapedArgs)
+                append("; ")
+                append("elif [ -x /data/adb/apd ]; then /data/adb/apd ")
                 append(escapedArgs)
                 append("; ")
                 append("elif [ -x /data/adb/reid ]; then /data/adb/reid ")
@@ -64,28 +76,32 @@ object ReidClient {
                 append("'")
             }
 
-            return@withContext runCatching {
-                val p = ProcessBuilder("su", "-c", cmd)
-                    .redirectErrorStream(true)
-                    .start()
-                val done = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
-                if (!done) {
-                    p.destroy()
-                    return@runCatching ReidExecResult(124, "timeout")
-                }
-                val out = runCatching { p.inputStream.bufferedReader().readText().trim() }.getOrDefault("")
-                val res = ReidExecResult(p.exitValue(), out)
-                ReiLog.append(
-                    context,
-                    if (res.exitCode == 0) ReiLogLevel.I else ReiLogLevel.W,
-                    "reid",
-                    "${args.joinToString(" ")} (exit=${res.exitCode})\n${res.output.take(2000)}",
-                )
-                res
-            }.getOrElse {
-                ReiLog.append(context, ReiLogLevel.E, "reid", "exception:${it.javaClass.simpleName}")
-                ReidExecResult(1, it.javaClass.simpleName)
+            return@withContext runShellSu(cmd, context, args, timeoutMs)
+        }
+    }
+
+    private fun runShellSu(cmd: String, context: Context, args: List<String>, timeoutMs: Long): ReidExecResult {
+        return runCatching {
+            val p = ProcessBuilder("su", "-c", cmd)
+                .redirectErrorStream(true)
+                .start()
+            val done = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            if (!done) {
+                p.destroy()
+                return@runCatching ReidExecResult(124, "timeout")
             }
+            val out = runCatching { p.inputStream.bufferedReader().readText().trim() }.getOrDefault("")
+            val res = ReidExecResult(p.exitValue(), out)
+            ReiLog.append(
+                context,
+                if (res.exitCode == 0) ReiLogLevel.I else ReiLogLevel.W,
+                "reid",
+                "${args.joinToString(" ")} (exit=${res.exitCode})\n${res.output.take(2000)}",
+            )
+            res
+        }.getOrElse {
+            ReiLog.append(context, ReiLogLevel.E, "reid", "exception:${it.javaClass.simpleName}")
+            ReidExecResult(1, it.javaClass.simpleName)
         }
     }
 
