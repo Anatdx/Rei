@@ -1,6 +1,7 @@
 #include "event.hpp"
 
 #include "assets.hpp"
+#include "core/allowlist.hpp"
 #include "defs.hpp"
 #include "log.hpp"
 #include "metamodule.hpp"
@@ -13,6 +14,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
@@ -136,6 +138,24 @@ bool OnPostDataFs(const std::string& superkey) {
 
 bool OnServices(const std::string& superkey) {
   LOGI("on_services triggered!");
+  // Murasaki daemon：fork 子进程常驻，注册 Binder 服务、供 Zygisk 桥接声明可注入的 App
+  pid_t pid = fork();
+  if (pid < 0) {
+    LOGW("Failed to fork Murasaki daemon: %s", strerror(errno));
+    RunStage("service", superkey, false);
+    return true;
+  }
+  if (pid == 0) {
+    (void)EnsureDirExists("/data/adb/rei");
+    std::string root_impl = Trim(ReadFile("/data/adb/ksu/root_impl"));
+    if (root_impl.empty()) root_impl = "ap";
+    ksud::allowlist_sync_to_backend(root_impl);
+    LOGI("Murasaki daemon child (pid %d), exec reid daemon...", getpid());
+    char* const argv[] = {"reid", "daemon", nullptr};
+    execv("/data/adb/reid", argv);
+    _exit(127);
+  }
+  LOGI("Murasaki daemon forked (child pid %d)", pid);
   RunStage("service", superkey, false);
   return true;
 }

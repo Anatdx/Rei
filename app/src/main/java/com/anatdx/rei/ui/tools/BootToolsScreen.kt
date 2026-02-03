@@ -3,6 +3,7 @@ package com.anatdx.rei.ui.tools
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +54,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun BootToolsScreen(rootAccessState: RootAccessState) {
+fun BootToolsScreen(
+    rootAccessState: RootAccessState,
+    onOpenPartitionManager: () -> Unit = {},
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -182,7 +186,17 @@ fun BootToolsScreen(rootAccessState: RootAccessState) {
 
         ReiCard {
             ListItem(
-                headlineContent = { Text("分区列表") },
+                headlineContent = { Text("分区管理") },
+                supportingContent = { Text("查看 / 备份 / 刷写分区，管理 A/B 槽位") },
+                leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                modifier = Modifier.clickable(onClick = onOpenPartitionManager),
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+        }
+
+        ReiCard {
+            ListItem(
+                headlineContent = { Text("分区列表（命令行）") },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )

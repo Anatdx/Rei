@@ -42,6 +42,8 @@ constexpr const char* REI_DIR = "/data/adb/rei";
 constexpr const char* REI_KSUD_BAK = "/data/adb/rei/ksud.bak";
 constexpr const char* REI_APD_BAK = "/data/adb/rei/apd.bak";
 constexpr const char* REI_ALLOWLIST_PATH = "/data/adb/rei/allowlist";
+/** Murasaki/Shizuku 白名单：供 Zygisk 桥接模块读取，声明可注入 Binder 的 UID */
+constexpr const char* REI_MURASAKI_ALLOWLIST_PATH = "/data/adb/rei/.murasaki_allowlist";
 constexpr const char* REI_SUPERKEY_PATH = "/data/adb/rei/superkey";
 
 constexpr const char* MODULE_DIR = "/data/adb/modules/";

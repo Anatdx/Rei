@@ -7,8 +7,10 @@
 #include "core/restorecon.hpp"
 #include "defs.hpp"
 #include "log.hpp"
+#include "murasaki_dispatch.hpp"
 #include "utils.hpp"
 #include "ksud/boot/boot_patch.hpp"
+#include "ksud/debug.hpp"
 #include "ksud/feature.hpp"
 #include "ksud/ksucalls.hpp"
 #include "ksud/module/metamodule.hpp"
@@ -226,16 +228,25 @@ void on_services() {
     LOGI("services triggered");
 
     // Hide bootloader unlock status (soft BL hiding)
-    // Service stage is the correct timing - after boot_completed is set
     hide_bootloader_status();
 
-    // Start Murasaki Binder service (in background)
-    LOGI("Starting Murasaki Binder service...");
-    murasaki::start_murasaki_binder_service_async();
-
-    // Start Shizuku compatible service
-    LOGI("Starting Shizuku compatible service...");
-    shizuku::start_shizuku_service();
+    // 创建长时间驻留的子进程：注册 Murasaki 服务、写入允许列表到 Rei 目录、供 Zygisk 桥接声明可注入的 App
+    pid_t pid = fork();
+    if (pid < 0) {
+        LOGW("Failed to fork Murasaki daemon: %s", strerror(errno));
+        run_stage("service", false);
+        return;
+    }
+    if (pid == 0) {
+        // 子进程：成为 Murasaki/Shizuku 服务进程，常驻后台
+        (void)ensure_dir_exists(REI_DIR);
+        auto root_impl_opt = read_file(ROOT_IMPL_CONFIG_PATH);
+        std::string root_impl = root_impl_opt ? trim(*root_impl_opt) : "ksu";
+        allowlist_sync_to_backend(root_impl);  // 同步到后端并写入 /data/adb/rei/.murasaki_allowlist
+        LOGI("Murasaki daemon child started (pid %d), joining Binder pool...", getpid());
+        _exit(run_daemon());
+    }
+    LOGI("Murasaki daemon forked (child pid %d)", pid);
 
     run_stage("service", false);
     LOGI("services completed");
@@ -250,23 +261,14 @@ void on_boot_completed() {
     // Run boot-completed stage
     run_stage("boot-completed", false);
 
+    // reid 根目录 murasaki_dispatch：扫描声明了 MRSK/Shizuku 的 App（Sui 同款），尝试 BinderDispatcher，成功者提权为管理器；ksud/ap 共用
     LOGI("Dispatching Shizuku Binder to apps...");
-    if (fork() == 0) {
-        // Child process
-        // Find manager APK path
-        // Default path, usually /data/app/com.anatdx.yukisu-..../base.apk
-        // Since we don't have a reliable way to find exact path in C++ without complex
-        // scanning/cmds We can use `pm path` via shell Or simpler: just exec our Java Dispatcher
-        // via a shell wrapper that resolves the path
-
-        const char* cmd = "full_path=$(pm path com.anatdx.yukisu | cut -d: -f2); "
-                          "if [ -f \"$full_path\" ]; then "
-                          "  CLASSPATH=$full_path app_process /system/bin "
-                          "com.anatdx.yukisu.ui.shizuku.BinderDispatcher; "
-                          "fi";
-
-        execlp("sh", "sh", "-c", cmd, nullptr);
-        _exit(0);
+    std::vector<AllowlistEntry> entries = allowlist_read_unified();
+    std::optional<std::string> owner =
+        dispatch_shizuku_binder_and_get_owner(entries, get_manager_uid());
+    if (owner) {
+        LOGI("Shizuku dispatch owner: %s", owner->c_str());
+        debug_set_manager(*owner);
     }
 
     LOGI("boot-completed completed");

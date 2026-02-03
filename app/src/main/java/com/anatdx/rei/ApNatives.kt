@@ -34,10 +34,28 @@ object ApNatives {
     @Keep
     external fun nativeDiag(superKey: String): String
 
+    /** 已授权 UID 列表（KP supercall 0x1102+0x1103），备用方案 */
+    @Keep
+    external fun nativeSuUids(superKey: String): IntArray
+
+    /** 授权 UID（KP supercall 0x1100），备用方案 */
+    @Keep
+    external fun nativeGrantSu(superKey: String, uid: Int, toUid: Int, scontext: String?): Long
+
+    /** 撤销 UID（KP supercall 0x1101），备用方案 */
+    @Keep
+    external fun nativeRevokeSu(superKey: String, uid: Int): Long
+
     fun ready(superKey: String): Boolean = runCatching { nativeReady(superKey) }.getOrElse { false }
     fun su(superKey: String, toUid: Int = 0, scontext: String? = null): Boolean =
         runCatching { nativeSu(superKey, toUid, scontext) == 0L }.getOrElse { false }
     fun suPath(superKey: String): String = runCatching { nativeSuPath(superKey) }.getOrElse { "" }
     fun kernelPatchVersion(superKey: String): Long = runCatching { nativeKernelPatchVersion(superKey) }.getOrElse { 0L }
     fun diag(superKey: String): String = runCatching { nativeDiag(superKey) }.getOrElse { "" }
+
+    fun suUids(superKey: String): IntArray = runCatching { nativeSuUids(superKey) }.getOrElse { intArrayOf() }
+    fun grantSu(superKey: String, uid: Int, toUid: Int = 0, scontext: String? = null): Long =
+        runCatching { nativeGrantSu(superKey, uid, toUid, scontext) }.getOrElse { -1L }
+    fun revokeSu(superKey: String, uid: Int): Long =
+        runCatching { nativeRevokeSu(superKey, uid) }.getOrElse { -1L }
 }

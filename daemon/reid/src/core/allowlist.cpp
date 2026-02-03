@@ -48,7 +48,19 @@ bool allowlist_write_unified(const std::vector<AllowlistEntry>& entries) {
     for (const auto& e : entries) {
         oss << e.first << '\t' << e.second << '\n';
     }
-    return write_file(REI_ALLOWLIST_PATH, oss.str());
+    if (!write_file(REI_ALLOWLIST_PATH, oss.str()))
+        return false;
+    allowlist_write_murasaki_allowlist_file();
+    return true;
+}
+
+void allowlist_write_murasaki_allowlist_file() {
+    std::vector<int32_t> uids = allowlist_uids();
+    std::ostringstream oss;
+    for (int32_t uid : uids) {
+        oss << uid << '\n';
+    }
+    (void)write_file(REI_MURASAKI_ALLOWLIST_PATH, oss.str());
 }
 
 bool allowlist_add(int32_t uid, const std::string& package) {
@@ -238,6 +250,7 @@ void allowlist_sync_to_backend(const std::string& impl) {
     } else {
         sync_to_ksu(entries);
     }
+    allowlist_write_murasaki_allowlist_file();
 }
 
 static std::string get_root_impl() {

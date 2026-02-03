@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.anatdx.rei.core.auth.ReiKeyHelper
+import io.murasaki.Murasaki
 
 /**
  * Application for Rei: holds APatch superkey and shared prefs.
@@ -49,5 +50,7 @@ class ReiApplication : Application() {
         sharedPreferences = getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
         ReiKeyHelper.setSharedPreferences(this, SP_NAME)
         superKey = ReiKeyHelper.readSuperKey()
+        // 初始化 Murasaki：直连 ksud 或通过 Zygisk 桥接（murasaki-zygisk-bridge）获取 Binder
+        Thread { Murasaki.init(packageName) }.start()
     }
 }

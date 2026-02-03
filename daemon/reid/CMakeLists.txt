@@ -137,6 +137,7 @@ set(SOURCES
     src/flash/flash_ak3.cpp
     src/flash/flash_partition.cpp
     src/init_event.cpp
+    src/murasaki_dispatch.cpp
     src/binder/murasaki_binder.cpp
     src/binder/murasaki_service.cpp
     src/binder/murasaki_ipc.cpp

@@ -515,8 +515,8 @@ private fun ManageCard(
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("Boot 工具") },
-                supportingContent = { Text("boot-info / flash") },
+                headlineContent = { Text("分区管理") },
+                supportingContent = { Text("查看、备份、刷写分区，管理 A/B 槽位") },
                 leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenBootTools),

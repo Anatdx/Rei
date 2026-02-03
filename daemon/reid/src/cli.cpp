@@ -1,4 +1,5 @@
 #include "cli.hpp"
+#include "core/allowlist.hpp"
 #include "defs.hpp"
 #include "init_event.hpp"
 #include "log.hpp"
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -110,7 +112,11 @@ static void print_reid_usage() {
     printf("USAGE: reid <COMMAND>\n\n");
     printf("COMMANDS:\n");
     printf("  daemon              Run as daemon (Binder service, Murasaki)\n");
-    printf("  set-root-impl <ksu|apatch>  Root 实现二选一：ksu 仅创建 ksud，apatch 仅创建 apd\n");
+    printf("  set-root-impl <ksu|apatch> Set root implementation (ksu or apatch)\n");
+    printf("  kernel reboot [recovery|bootloader|poweroff]  Reboot device (KP/KSU backend)\n");
+    printf("  allowlist get             List UIDs in unified allowlist (one per line)\n");
+    printf("  allowlist grant <uid> <pkg>  Add UID+pkg to allowlist and sync to kernel\n");
+    printf("  allowlist revoke <uid>      Remove UID from allowlist and sync to kernel\n");
     printf("  version             Show version\n");
     printf("  help                Show this help\n");
 }
@@ -157,6 +163,77 @@ int reid_cli_run(int argc, char* argv[]) {
             return 1;
         }
         return set_root_impl(impl);
+    }
+
+    if (cmd == "kernel") {
+        if (args.empty() || args[0] != "reboot") {
+            printf("USAGE: reid kernel reboot [recovery|bootloader|poweroff]\n");
+            return 1;
+        }
+        std::vector<std::string> cmd_line{"/system/bin/reboot"};
+        if (args.size() > 1) {
+            const std::string& mode = args[1];
+            if (mode == "recovery") {
+                cmd_line.push_back("recovery");
+            } else if (mode == "bootloader") {
+                cmd_line.push_back("bootloader");
+            } else if (mode == "poweroff") {
+                cmd_line.push_back("-p");
+            } else {
+                printf("Unknown reboot mode: %s\n", mode.c_str());
+                return 1;
+            }
+        }
+        auto r = exec_command(cmd_line);
+        if (r.exit_code != 0) {
+            if (!r.stdout_str.empty()) printf("%s", r.stdout_str.c_str());
+            if (!r.stderr_str.empty()) printf("%s", r.stderr_str.c_str());
+            return 1;
+        }
+        printf("OK\n");
+        return 0;
+    }
+
+    if (cmd == "allowlist") {
+        if (args.empty()) {
+            printf("USAGE: reid allowlist get | grant <uid> <pkg> | revoke <uid>\n");
+            return 1;
+        }
+        const std::string& sub = args[0];
+        if (sub == "get") {
+            std::vector<int32_t> uids = allowlist_uids();
+            for (int32_t uid : uids) {
+                printf("%d\n", uid);
+            }
+            return 0;
+        }
+        if (sub == "grant" && args.size() >= 3) {
+            int32_t uid = static_cast<int32_t>(std::strtol(args[1].c_str(), nullptr, 10));
+            const std::string& pkg = args[2];
+            if (!allowlist_add(uid, pkg)) {
+                printf("allowlist add failed\n");
+                return 1;
+            }
+            if (!allowlist_grant_to_backend(uid, pkg)) {
+                printf("allowlist grant to backend failed\n");
+                return 1;
+            }
+            return 0;
+        }
+        if (sub == "revoke" && args.size() >= 2) {
+            int32_t uid = static_cast<int32_t>(std::strtol(args[1].c_str(), nullptr, 10));
+            if (!allowlist_remove_by_uid(uid)) {
+                printf("allowlist remove failed\n");
+                return 1;
+            }
+            if (!allowlist_revoke_from_backend(uid)) {
+                printf("allowlist revoke from backend failed\n");
+                return 1;
+            }
+            return 0;
+        }
+        printf("USAGE: reid allowlist get | grant <uid> <pkg> | revoke <uid>\n");
+        return 1;
     }
 
     printf("Unknown command: %s\n", cmd.c_str());

@@ -372,17 +372,22 @@ int boot_patch(const std::vector<std::string>& args) {
         }
     }
 
-    // Try current directory
+    // Try current directory (skip /data/adb/ksud and /data/adb/ksu to avoid temp dirs there)
     if (workdir.empty()) {
         char cwd[PATH_MAX];
         if (getcwd(cwd, sizeof(cwd)) && access(cwd, W_OK) == 0) {
-            std::string template_path = std::string(cwd) + "/KernelSU_XXXXXX";
-            std::vector<char> tmpdir_template(template_path.begin(), template_path.end());
-            tmpdir_template.push_back('\0');
-            tmpdir = mkdtemp(tmpdir_template.data());
-            if (tmpdir) {
-                workdir = tmpdir;
-                printf("- Using current directory: %s\n", cwd);
+            std::string cwd_s(cwd);
+            if (cwd_s == "/data/adb/ksud" || cwd_s == "/data/adb/ksu") {
+                // skip: do not create temp dirs in ksud/ksu
+            } else {
+                std::string template_path = std::string(cwd) + "/KernelSU_XXXXXX";
+                std::vector<char> tmpdir_template(template_path.begin(), template_path.end());
+                tmpdir_template.push_back('\0');
+                tmpdir = mkdtemp(tmpdir_template.data());
+                if (tmpdir) {
+                    workdir = tmpdir;
+                    printf("- Using current directory: %s\n", cwd);
+                }
             }
         }
     }
@@ -539,12 +544,21 @@ int boot_patch(const std::vector<std::string>& args) {
         }
     }
 
-    // Inject SuperKey if specified
-    if (!parsed.superkey.empty()) {
+    // Inject SuperKey: CLI arg, or fallback to REI unified superkey file
+    std::string effective_superkey = parsed.superkey;
+    if (effective_superkey.empty()) {
+        auto key_opt = read_file(REI_SUPERKEY_PATH);
+        if (key_opt)
+            effective_superkey = trim(*key_opt);
+    }
+    if (parsed.signature_bypass && effective_superkey.empty()) {
+        LOGE("signature_bypass requires superkey; set -s/--superkey or configure %s", REI_SUPERKEY_PATH);
+        cleanup();
+        return 1;
+    }
+    if (!effective_superkey.empty()) {
         printf("- Injecting SuperKey into LKM\n");
-        inject_superkey_to_lkm(kmod_file, parsed.superkey, parsed.signature_bypass);
-    } else if (parsed.signature_bypass) {
-        printf("- Warning: signature_bypass requires superkey to be set, ignoring\n");
+        inject_superkey_to_lkm(kmod_file, effective_superkey, parsed.signature_bypass);
     }
 
     // Inject LKM priority setting

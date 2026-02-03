@@ -26,8 +26,12 @@ static std::string get_exe_basename(const std::string& path) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string exe = get_self_path();
-    std::string base = get_exe_basename(exe);
+    // Avoid cwd being /data/adb/ksud when invoked via su -c from App; prevents temp files (e.g. apd_*) in ksud dir
+    (void)chdir("/");
+
+    // Use argv[0] so that when reid is a symlink to ksud, we still run reid_cli_run (allowlist etc.)
+    std::string invoked_as = (argc > 0 && argv[0]) ? argv[0] : get_self_path();
+    std::string base = get_exe_basename(invoked_as);
 
     if (base == "apd") {
         apd::InitLog();

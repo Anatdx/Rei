@@ -34,7 +34,8 @@ object ReidLauncher {
             val installCmd = buildString {
                 fun esc(s: String) = s.replace("'", "'\\''")
 
-                append("set -e; ")
+                // cwd 固定到 /data/adb，避免 su 把 cwd 设为 /data/adb/ksud 时 ln -f 在该目录下产生临时文件（如 apd_xxxxxx）
+                append("set -e; cd /data/adb || exit 1; ")
                 append("mkdir -p /data/adb; ")
 
                 // Install/update reid only if content differs.
@@ -50,12 +51,13 @@ object ReidLauncher {
                 val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
                 val reiDir = "/data/adb/rei"
                 append("mkdir -p '").append(reiDir).append("'; ")
+                // 用 ln 到 .new 再 mv 覆盖，代替 ln -f，避免 ln -f 在 /data/adb 下产生 apd_* / ksud_* 临时文件；且不先删 apd/ksud 否则 su 会废
                 if (useApd) {
                     append("[ -f '").append(ksud).append("' ] && mv -f '").append(ksud).append("' '").append(reiDir).append("/ksud.bak'; ")
-                    append("[ -f '").append(reiDir).append("/apd.bak' ] && mv -f '").append(reiDir).append("/apd.bak' '").append(apd).append("' || ln -f '").append(dstReid).append("' '").append(apd).append("'; ")
+                    append("[ -f '").append(reiDir).append("/apd.bak' ] && mv -f '").append(reiDir).append("/apd.bak' '").append(apd).append("' || (ln '").append(dstReid).append("' '").append(apd).append(".new' && mv -f '").append(apd).append(".new' '").append(apd).append("'); ")
                 } else {
                     append("[ -f '").append(apd).append("' ] && mv -f '").append(apd).append("' '").append(reiDir).append("/apd.bak'; ")
-                    append("[ -f '").append(reiDir).append("/ksud.bak' ] && mv -f '").append(reiDir).append("/ksud.bak' '").append(ksud).append("' || ln -f '").append(dstReid).append("' '").append(ksud).append("'; ")
+                    append("[ -f '").append(reiDir).append("/ksud.bak' ] && mv -f '").append(reiDir).append("/ksud.bak' '").append(ksud).append("' || (ln '").append(dstReid).append("' '").append(ksud).append(".new' && mv -f '").append(ksud).append(".new' '").append(ksud).append("'); ")
                 }
                 val daemonBin = if (useApd) apd else ksud
                 append("(restorecon -F '").append(dstReid).append("' '").append(daemonBin).append("' 2>/dev/null || true); ")
@@ -70,6 +72,7 @@ object ReidLauncher {
                     append("('").append(ksud).append("' profile set-allow '").append(uid).append("' '").append(esc(pkg)).append("' 1 >/dev/null 2>&1 || true); ")
                 }
 
+                append("rm -f '").append(apd).append(".new' '").append(ksud).append(".new'; ")
                 append("echo OK")
             }
 

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -45,15 +44,15 @@ import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.core.root.RootAccessState
+import com.anatdx.rei.ui.util.getSELinuxStatus
 import com.anatdx.rei.ui.auth.AuthLevel
 import com.anatdx.rei.ui.auth.AuthRequest
 import com.anatdx.rei.ui.auth.AuthorizeActivity
+import com.anatdx.rei.ui.components.PullToRefreshBox
 import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.File
 
 @Composable
 fun HomeScreen(
@@ -63,32 +62,41 @@ fun HomeScreen(
     onOpenLogs: () -> Unit,
     onOpenBootTools: () -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    var refreshKey by remember { mutableStateOf(0) }
+    PullToRefreshBox(
+        refreshing = false,
+        onRefresh = { refreshKey++; onRefreshRoot() },
     ) {
-        item { Spacer(Modifier.height(4.dp)) }
+        LazyColumn(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
-        if (ReiApplication.superKey.isEmpty()) {
-            item {
-                SuperKeyPromptCard(onOpenSettings = onOpenSettings)
+            if (ReiApplication.superKey.isEmpty()) {
+                item {
+                    SuperKeyPromptCard(onOpenSettings = onOpenSettings)
+                }
+            } else if (ReiKeyHelper.isValidSuperKey(ReiApplication.superKey)) {
+                item {
+                    KpReadyHintCard(onOpenSettings = onOpenSettings)
+                }
             }
-        } else if (ReiKeyHelper.isValidSuperKey(ReiApplication.superKey)) {
             item {
-                KpReadyHintCard(onOpenSettings = onOpenSettings)
+                MurasakiStatusCard(packageName = LocalContext.current.packageName, refreshTrigger = refreshKey)
             }
-        }
-        item { SystemStatusCard(rootAccessState) }
-        item {
-            ActionsCard(
-                onRefreshRoot = onRefreshRoot,
-                onOpenSettings = onOpenSettings,
-                onOpenLogs = onOpenLogs,
-                onOpenBootTools = onOpenBootTools,
-            )
-        }
+            item { SystemStatusCard(rootAccessState, refreshTrigger = refreshKey) }
+            item {
+                ActionsCard(
+                    onRefreshRoot = onRefreshRoot,
+                    onOpenSettings = onOpenSettings,
+                    onOpenLogs = onOpenLogs,
+                    onOpenBootTools = onOpenBootTools,
+                )
+            }
 
-        item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(16.dp)) }
+        }
     }
 }
 
@@ -102,7 +110,7 @@ private data class SystemStatus(
 )
 
 @Composable
-private fun SystemStatusCard(rootAccessState: RootAccessState) {
+private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: Int = 0) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var sys by remember { mutableStateOf(SystemStatus(device = "${Build.MANUFACTURER} ${Build.MODEL}".trim())) }
@@ -115,16 +123,7 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                         .inputStream.bufferedReader().readText().trim()
                 }.getOrNull().orEmpty()
             }
-            val selinux = withContext(Dispatchers.IO) {
-                // Prefer backend+root (ksud/reid under su) to avoid permission denied on some ROMs.
-                if (rootAccessState is RootAccessState.Granted) {
-                    val r = ReidClient.exec(ctx, listOf("debug", "getenforce"), timeoutMs = 3_000L)
-                    val out = r.output.trim()
-                    if (out.isNotBlank()) out else querySelinuxMode()
-                } else {
-                    querySelinuxMode()
-                }
-            }
+            val selinux = withContext(Dispatchers.IO) { getSELinuxStatus(ctx) }
             val ksu = withContext(Dispatchers.IO) {
                 if (rootAccessState is RootAccessState.Granted) {
                     val r = ReidClient.exec(ctx, listOf("debug", "ksu-info"), timeoutMs = 3_000L)
@@ -162,7 +161,7 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
         }
     }
 
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(Unit, refreshTrigger) { refresh() }
 
     val (rootChip, rootIcon) = when (rootAccessState) {
         RootAccessState.Requesting -> "Root: 检测中" to Icons.Outlined.Info
@@ -177,12 +176,6 @@ private fun SystemStatusCard(rootAccessState: RootAccessState) {
                 headlineContent = { Text("系统状态") },
                 supportingContent = { Text(sys.device.ifBlank { "设备" }) },
                 leadingContent = { Icon(Icons.Outlined.Storage, contentDescription = null) },
-                trailingContent = {
-                    AssistChip(
-                        onClick = { refresh() },
-                        label = { Text("刷新") },
-                    )
-                },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
@@ -244,29 +237,6 @@ private fun formatKpVersion(ver: Long): String {
     val minor = (ver shr 8) and 0xFF
     val patch = ver and 0xFF
     return "$major.$minor.$patch"
-}
-
-private fun querySelinuxMode(): String {
-    fun readProc(cmd: List<String>): String? {
-        return runCatching {
-            val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-            p.inputStream.bufferedReader().use(BufferedReader::readText).trim()
-        }.getOrNull()
-    }
-
-    // Prefer absolute path to avoid PATH issues.
-    val ge = readProc(listOf("/system/bin/getenforce"))?.takeIf { it.isNotBlank() }
-        ?: readProc(listOf("sh", "-c", "/system/bin/getenforce 2>/dev/null"))?.takeIf { it.isNotBlank() }
-
-    if (ge != null && !ge.equals("unknown", ignoreCase = true)) return ge
-
-    // Fallback: /sys/fs/selinux/enforce -> 1 Enforcing / 0 Permissive
-    val enforce = runCatching { File("/sys/fs/selinux/enforce").readText().trim() }.getOrNull()
-    return when (enforce) {
-        "1" -> "Enforcing"
-        "0" -> "Permissive"
-        else -> ge ?: "unknown"
-    }
 }
 
 @Composable
@@ -366,8 +336,8 @@ private fun ActionsCard(
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("Boot 工具") },
-                supportingContent = { Text("boot-info / flash / patch") },
+                headlineContent = { Text("分区管理") },
+                supportingContent = { Text("查看、备份、刷写分区，管理 A/B 槽位") },
                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onOpenBootTools),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),

@@ -7,6 +7,8 @@
 #include "module.hpp"
 #include "sepolicy.hpp"
 #include "supercall.hpp"
+#include "../defs.hpp"
+#include "../utils.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -41,7 +43,8 @@ void PrintUsage() {
       "  services\n"
       "  boot-completed\n"
       "  uid-listener\n"
-      "  sepolicy check <policy>\n";
+      "  sepolicy check <policy>\n"
+      "  allowlist get | grant <uid> <pkg> | revoke <uid>\n";
   std::fprintf(stdout, "%s", usage);
 }
 
@@ -80,15 +83,24 @@ int RunCli(int argc, char** argv) {
     }
     args.push_back(arg);
   }
-
-  if (!superkey.empty()) {
-    PrivilegeApdProfile(superkey);
+  // KernelPatch backend: ALL operations require superkey (CLI or Rei unified file)
+  if (superkey.empty()) {
+    auto key_opt = ksud::read_file(ksud::REI_SUPERKEY_PATH);
+    if (key_opt)
+      superkey = ksud::trim(*key_opt);
   }
 
   if (args.empty()) {
     PrintUsage();
     return 1;
   }
+
+  if (superkey.empty()) {
+    LOGE("KernelPatch backend requires superkey for all operations. Set -s/--superkey or configure %s", ksud::REI_SUPERKEY_PATH);
+    return 1;
+  }
+
+  PrivilegeApdProfile(superkey);
 
   const std::string& cmd = args[0];
   bool ok = false;
@@ -132,6 +144,60 @@ int RunCli(int argc, char** argv) {
       PrintUsage();
       return 1;
     }
+  } else if (cmd == "allowlist") {
+    if (args.size() < 2) {
+      std::fprintf(stderr, "USAGE: apd allowlist get | grant <uid> <pkg> | revoke <uid>\n");
+      return 1;
+    }
+    const std::string& sub = args[1];
+    if (sub == "get") {
+      long num = ScSuUidNums(superkey);
+      if (num < 0) {
+        LOGE("allowlist get: ScSuUidNums failed %ld", num);
+        return 1;
+      }
+      if (num == 0) {
+        std::fprintf(stdout, "[]\n");
+        return 0;
+      }
+      std::vector<int> uids(static_cast<size_t>(num), 0);
+      long n = ScSuAllowUids(superkey, uids);
+      if (n < 0) {
+        LOGE("allowlist get: ScSuAllowUids failed %ld", n);
+        return 1;
+      }
+      std::fprintf(stdout, "[\n");
+      for (long i = 0; i < n; ++i) {
+        std::fprintf(stdout, "  %d%s\n", uids[static_cast<size_t>(i)],
+                     i + 1 < n ? "," : "");
+      }
+      std::fprintf(stdout, "]\n");
+      return 0;
+    }
+    if (sub == "grant" && args.size() >= 4) {
+      int uid = static_cast<int>(std::strtol(args[2].c_str(), nullptr, 10));
+      SuProfile profile{};
+      profile.uid = uid;
+      profile.to_uid = 0;
+      profile.scontext[0] = '\0';
+      long rc = ScSuGrantUid(superkey, profile);
+      if (rc != 0) {
+        LOGE("allowlist grant failed: %ld", rc);
+        return 1;
+      }
+      return 0;
+    }
+    if (sub == "revoke" && args.size() >= 3) {
+      int uid = static_cast<int>(std::strtol(args[2].c_str(), nullptr, 10));
+      long rc = ScSuRevokeUid(superkey, uid);
+      if (rc != 0) {
+        LOGE("allowlist revoke failed: %ld", rc);
+        return 1;
+      }
+      return 0;
+    }
+    std::fprintf(stderr, "USAGE: apd allowlist get | grant <uid> <pkg> | revoke <uid>\n");
+    return 1;
   } else {
     PrintUsage();
     return 1;

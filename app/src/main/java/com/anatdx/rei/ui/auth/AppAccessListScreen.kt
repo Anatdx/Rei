@@ -44,7 +44,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.anatdx.rei.KsuNatives
+import com.anatdx.rei.ApNatives
+import com.anatdx.rei.ReiApplication
+import com.anatdx.rei.core.reid.ReidClient
+import com.anatdx.rei.core.reid.ReidExecResult
+import com.anatdx.rei.ui.components.PullToRefreshBox
 import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -120,45 +124,52 @@ fun AppAccessListScreen() {
 
         scope.launch {
             pending = pending - key
-            val ok = runCatching {
-                KsuNatives.setAppProfile(
-                    KsuNatives.Profile(
-                        name = pkg,
-                        currentUid = app.uid,
-                        allowSu = to,
-                    )
-                )
-            }.getOrDefault(false)
-
-            if (!ok) {
-                // Revert on failure (still silent, but show reason in header).
+            // 优先：ksud profile set-allow；其次：apd allowlist grant/revoke；备用：JNI ApNatives
+            var result = runCatching {
+                ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, if (to) "1" else "0"), timeoutMs = 10_000L)
+            }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+            if (result.exitCode != 0) {
+                val apdArgs = if (to) listOf("allowlist", "grant", uid, pkg) else listOf("allowlist", "revoke", uid)
+                result = runCatching {
+                    ReidClient.exec(ctx, apdArgs, timeoutMs = 10_000L)
+                }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+            }
+            if (result.exitCode != 0) {
+                val superKey = ReiApplication.superKey
+                if (superKey.isNotEmpty() && ApNatives.ready(superKey)) {
+                    val rc = if (to) ApNatives.grantSu(superKey, app.uid, 0, null)
+                    else ApNatives.revokeSu(superKey, app.uid)
+                    if (rc == 0L) {
+                        lastError = null
+                        refresh()
+                        return@launch
+                    }
+                }
                 val reverted = apps.map {
                     if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
                 }
                 apps = reverted
                 updateStatsFrom(reverted)
-                val isManager = runCatching { KsuNatives.isManager }.getOrDefault(false)
-                val ver = runCatching { KsuNatives.version }.getOrDefault(-1)
-                val driver = runCatching { KsuNatives.isKsuDriverPresent }.getOrDefault(false)
-                val errno = runCatching { KsuNatives.lastErrno }.getOrDefault(-1)
-                lastError = "setAppProfile failed (isManager=$isManager, driver=$driver, version=$ver, errno=$errno)"
+                lastError = result.output.ifBlank { "授权操作失败 (exit=${result.exitCode})" }.take(200)
             } else {
                 lastError = null
-                // Refresh allowlist/stat counters after successful change.
-                val allow = runCatching { KsuNatives.allowList.toHashSet() }.getOrDefault(hashSetOf())
-                updateStatsFrom(apps.map { it.copy(granted = allow.contains(it.uid)) })
+                refresh()
             }
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    PullToRefreshBox(
+        refreshing = loading,
+        onRefresh = { scope.launch { refresh() } },
     ) {
-        item { Spacer(Modifier.height(4.dp)) }
+        LazyColumn(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
-        item {
-            ReiCard {
+            item {
+                ReiCard {
                 ListItem(
                     headlineContent = { Text("应用授权列表") },
                     supportingContent = {
@@ -238,7 +249,18 @@ fun AppAccessListScreen() {
 
         item { Spacer(Modifier.height(16.dp)) }
     }
+    }
+}
 
+/** 解析 ksud profile allowlist 输出的 JSON 数组 [ uid, ... ] */
+private fun parseProfileAllowlistJson(output: String): Set<Int> {
+    return output
+        .replace("[", " ")
+        .replace("]", " ")
+        .split(",", "\n")
+        .map { it.trim() }
+        .mapNotNull { it.toIntOrNull() }
+        .toSet()
 }
 
 private data class AuthStats(
@@ -258,9 +280,29 @@ private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
         return ManagerViewResult(entries = emptyList(), stats = AuthStats(), error = "未能读取本机应用列表")
     }
 
-    val allow = runCatching { KsuNatives.allowList.toHashSet() }.getOrDefault(hashSetOf())
-    val isManager = runCatching { KsuNatives.isManager }.getOrDefault(false)
-    val ver = runCatching { KsuNatives.version }.getOrDefault(-1)
+    // 优先：ksud profile allowlist；其次：apd allowlist get；备用：JNI ApNatives.suUids
+    var allow = emptySet<Int>()
+    var allowError: String? = null
+    val profileResult = runCatching {
+        ReidClient.exec(ctx, listOf("profile", "allowlist"), timeoutMs = 10_000L)
+    }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+    if (profileResult.exitCode == 0) {
+        allow = parseProfileAllowlistJson(profileResult.output)
+    } else {
+        val apdResult = runCatching {
+            ReidClient.exec(ctx, listOf("allowlist", "get"), timeoutMs = 10_000L)
+        }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+        if (apdResult.exitCode == 0) {
+            allow = parseProfileAllowlistJson(apdResult.output)
+        } else {
+            allowError = profileResult.output.ifBlank { apdResult.output }.take(200)
+            val superKey = ReiApplication.superKey
+            if (superKey.isNotEmpty() && ApNatives.ready(superKey)) {
+                allow = ApNatives.suUids(superKey).toSet()
+                allowError = null
+            }
+        }
+    }
 
     val out = pkgs.map { p ->
         AppEntry(
@@ -273,11 +315,7 @@ private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
     val granted = out.count { it.granted }
     val stats = AuthStats(allowlistCount = allow.size, grantedCount = granted)
 
-    val err = when {
-        ver <= 0 -> "KernelSU 驱动不可用（version=$ver）"
-        !isManager -> "当前管理器未被内核识别（isManager=false）"
-        else -> null
-    }
+    val err = allowError
     return ManagerViewResult(entries = out, stats = stats, error = err)
 }
 
@@ -304,12 +342,6 @@ private suspend fun queryInstalledPackages(ctx: Context): List<InstalledPkg> {
             out
         }.getOrDefault(emptyList())
     }
-}
-
-private fun IntArray.toHashSet(): HashSet<Int> {
-    val out = HashSet<Int>(size)
-    for (v in this) out.add(v)
-    return out
 }
 
 @Composable

@@ -49,33 +49,20 @@ object ReidClient {
         }
     }
 
-    /** 使用 reid 本体执行（用于 set-root-impl 等 reid 专属命令） */
+    /** 使用 reid 本体执行（用于 set-root-impl、allowlist 等 reid 专属命令）。参数在单条 su -c 命令内直接拼接并转义，避免嵌套 sh 与 $@ 导致参数被拆错。 */
     suspend fun execReid(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
-            val escapedArgs = args.joinToString(" ") { shellEscape(it) }
-            val cmd = "sh -c 'if [ -x /data/adb/reid ]; then /data/adb/reid $escapedArgs; else echo no_reid; exit 127; fi'"
+            val reidArgs = args.joinToString(" ") { shellEscape(it) }
+            val cmd = "if [ -x /data/adb/reid ]; then exec /data/adb/reid $reidArgs; else echo no_reid; exit 127; fi"
             runShellSu(cmd, context, args, timeoutMs)
         }
     }
 
+    /** 使用当前后端（ksud/apd/reid）执行。参数在单条 su -c 命令内直接拼接并转义，避免嵌套 sh 与 $@ 导致参数被拆错。 */
     suspend fun exec(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
-            val escapedArgs = args.joinToString(" ") { shellEscape(it) }
-            val cmd = buildString {
-                append("sh -c '")
-                append("if [ -x /data/adb/ksud ]; then /data/adb/ksud ")
-                append(escapedArgs)
-                append("; ")
-                append("elif [ -x /data/adb/apd ]; then /data/adb/apd ")
-                append(escapedArgs)
-                append("; ")
-                append("elif [ -x /data/adb/reid ]; then /data/adb/reid ")
-                append(escapedArgs)
-                append("; ")
-                append("else echo no_installed_backend; exit 127; fi")
-                append("'")
-            }
-
+            val backendArgs = args.joinToString(" ") { shellEscape(it) }
+            val cmd = "if [ -x /data/adb/ksud ]; then exec /data/adb/ksud $backendArgs; elif [ -x /data/adb/apd ]; then exec /data/adb/apd $backendArgs; elif [ -x /data/adb/reid ]; then exec /data/adb/reid $backendArgs; else echo no_installed_backend; exit 127; fi"
             return@withContext runShellSu(cmd, context, args, timeoutMs)
         }
     }
