@@ -92,10 +92,11 @@ async def main():
         exit(1)
     print("[+] Logging in Telegram with bot")
     session_str = os.environ.get("SESSION_STRING") or ""
-    async with TelegramClient(
-        StringSession(session_str), API_ID, API_HASH
-    ) as bot:
-        await bot.start(bot_token=BOT_TOKEN)
+    bot = TelegramClient(StringSession(session_str), API_ID, API_HASH)
+    await bot.connect()
+    if not await bot.is_user_authorized():
+        await bot.sign_in(bot_token=BOT_TOKEN)
+    try:
         caption = [""] * len(files)
         caption[-1] = get_caption()
         print("[+] Caption: ")
@@ -111,6 +112,8 @@ async def main():
             parse_mode="markdown",
         )
         print("[+] Done!")
+    finally:
+        await bot.disconnect()
 
 
 if __name__ == "__main__":
