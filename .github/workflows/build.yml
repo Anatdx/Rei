@@ -66,7 +66,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools build-tools;36.1.0 ndk;29.0.14206865'
+          packages: 'platform-tools build-tools;36.1.0 build-tools;33.0.0 ndk;29.0.14206865'
 
       - name: Build with Gradle
         env:
@@ -79,6 +79,7 @@ jobs:
       - name: Sign Release
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         if: steps.check_signing.outputs.signing_configured == 'true'
         continue-on-error: true
         uses: kevin-david/zipalign-sign-android-release@v2
@@ -86,7 +87,7 @@ jobs:
         with:
           releaseDirectory: app/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
+          alias: ${{ vars.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
           zipAlign: true
@@ -94,6 +95,7 @@ jobs:
       - name: Sign Debug APK
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         if: steps.check_signing.outputs.signing_configured == 'true'
         continue-on-error: true
         uses: kevin-david/zipalign-sign-android-release@v2
@@ -101,7 +103,7 @@ jobs:
         with:
           releaseDirectory: app/build/outputs/apk/debug
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
+          alias: ${{ vars.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
           zipAlign: true
