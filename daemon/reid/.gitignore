@@ -16,8 +16,8 @@ cmake-build-*/
 *.so
 *.dylib
 
-# Executables
-ksud
+# Executables (only root-level binary, do not ignore src/ksud/)
+/ksud
 
 # Auto-generated source files
 src/defs.cpp
