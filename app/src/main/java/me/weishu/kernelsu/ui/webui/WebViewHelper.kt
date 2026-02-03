@@ -175,6 +175,7 @@ internal suspend fun prepareWebView(
 
             webUIState.webView = webView
             webView.addJavascriptInterface(WebViewInterface(webUIState), "ksu")
+            webUIState.uiEvent = WebUIEvent.WebViewReady
         }
     }
 }

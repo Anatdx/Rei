@@ -278,15 +278,17 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            IconButton(
-                                enabled = canUseRoot() && !loading && m.enabled && !m.update && !m.remove,
-                                onClick = {
-                                    val it = android.content.Intent(ctx, WebUIActivity::class.java)
-                                        .putExtra("id", m.id)
-                                    ctx.startActivity(it)
-                                },
-                            ) {
-                                Icon(Icons.Outlined.Language, contentDescription = "WebUI")
+                            if (m.web) {
+                                IconButton(
+                                    enabled = canUseRoot() && !loading && m.enabled && !m.update && !m.remove,
+                                    onClick = {
+                                        val it = android.content.Intent(ctx, WebUIActivity::class.java)
+                                            .putExtra("id", m.id)
+                                        ctx.startActivity(it)
+                                    },
+                                ) {
+                                    Icon(Icons.Outlined.Language, contentDescription = "WebUI")
+                                }
                             }
 
                             IconButton(
@@ -342,6 +344,7 @@ private data class ModuleEntry(
     val update: Boolean,
     val remove: Boolean,
     val action: Boolean,
+    val web: Boolean,
 )
 
 private fun parseModuleListJson(raw: String): List<ModuleEntry> {
@@ -359,6 +362,7 @@ private fun parseModuleListJson(raw: String): List<ModuleEntry> {
             update = o.boolCompat("update"),
             remove = o.boolCompat("remove"),
             action = o.boolCompat("action"),
+            web = o.boolCompat("web"),
         )
     }
     return out
