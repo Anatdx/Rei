@@ -1,5 +1,6 @@
 package com.anatdx.rei.ui.modules
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -284,7 +285,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 IconButton(
                                     enabled = canUseRoot() && !loading && m.enabled && !m.update && !m.remove,
                                     onClick = {
-                                        val it = android.content.Intent(ctx, WebUIActivity::class.java)
+                                        val it = Intent(ctx, WebUIActivity::class.java)
                                             .putExtra("id", m.id)
                                         ctx.startActivity(it)
                                     },

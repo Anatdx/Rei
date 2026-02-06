@@ -17,8 +17,6 @@ import com.anatdx.rei.ui.theme.ThemePreset
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.core.root.RootResult
 import com.anatdx.rei.core.root.RootShell
-import com.anatdx.rei.core.reid.ReidLauncher
-
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,10 +34,9 @@ class MainActivity : AppCompatActivity() {
             LaunchedEffect(rootNonce) {
                 rootState = RootAccessState.Requesting
                 // Request su silently (no UI dialog in-app; provider may still prompt).
+                // 不再在获得 root 时自动安装 reid，由用户在首页点击「安装系统补丁」触发。
                 when (val r = RootShell.request()) {
                     is RootResult.Granted -> {
-                        // Prepare backend first, then expose "Granted" to UI (so Home refresh sees it ready).
-                        ReidLauncher.start(this@MainActivity)
                         rootState = RootAccessState.Granted(r.stdout)
                     }
                     is RootResult.Denied -> {

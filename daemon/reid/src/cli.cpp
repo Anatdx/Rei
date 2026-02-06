@@ -108,10 +108,13 @@ bool CliParser::has_option(const std::string& name) const {
 }
 
 static void print_reid_usage() {
-    printf("Rei userspace daemon (reid 本体)\n\n");
+    printf("Rei userspace daemon\n\n");
     printf("USAGE: reid <COMMAND>\n\n");
     printf("COMMANDS:\n");
     printf("  daemon              Run as daemon (Binder service, Murasaki)\n");
+    printf("  post-fs-data        Trigger post-fs-data event\n");
+    printf("  services            Trigger service event (start Murasaki daemon)\n");
+    printf("  boot-completed      Trigger boot-completed event\n");
     printf("  set-root-impl <ksu|apatch> Set root implementation (ksu or apatch)\n");
     printf("  kernel reboot [recovery|bootloader|poweroff]  Reboot device (KP/KSU backend)\n");
     printf("  allowlist get             List UIDs in unified allowlist (one per line)\n");
@@ -151,6 +154,18 @@ int reid_cli_run(int argc, char* argv[]) {
     }
     if (cmd == "daemon") {
         return run_daemon();
+    }
+    // Murasaki: 与 ksud 一致，支持通过 reid 触发生命周期（Magisk/脚本可调用 reid services）
+    if (cmd == "post-fs-data") {
+        return on_post_data_fs();
+    }
+    if (cmd == "services") {
+        on_services();
+        return 0;
+    }
+    if (cmd == "boot-completed") {
+        on_boot_completed();
+        return 0;
     }
     if (cmd == "set-root-impl") {
         if (args.size() < 1) {

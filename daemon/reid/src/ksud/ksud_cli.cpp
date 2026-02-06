@@ -28,7 +28,7 @@
 namespace ksud {
 
 static void print_ksud_usage() {
-    printf("KernelSU userspace (ksud 次级)\n\n");
+    printf("KernelSU userspace \n\n");
     printf("USAGE: ksud <COMMAND>\n\n");
     printf("COMMANDS:\n");
     printf("  daemon         Run as daemon (Binder service)\n");

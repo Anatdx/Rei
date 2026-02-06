@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Murasaki: ServiceManager is @hide API, not in public SDK; R8 reports it as missing at compile time but it exists at runtime
+-dontwarn android.os.ServiceManager

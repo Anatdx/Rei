@@ -10,8 +10,7 @@ import com.anatdx.rei.core.auth.ReiKeyHelper
 import io.murasaki.Murasaki
 
 /**
- * Application for Rei: holds APatch superkey and shared prefs.
- * When backend is AP/KernelPatch, superkey is used for supercall auth.
+ * Rei Application：持有超级密钥与 SP。密钥保存即落盘；鉴权结果仅用于首页状态展示。
  */
 class ReiApplication : Application() {
 
@@ -25,23 +24,30 @@ class ReiApplication : Application() {
         lateinit var sharedPreferences: SharedPreferences
             private set
 
-        /** APatch/KernelPatch superkey; empty when not set or backend is YukiSU only. */
+        /** 超级密钥；保存即写入存储，不依赖 nativeReady。鉴权在首页刷新时用于显示 KP 状态。 */
         var superKey: String = ""
             set(value) {
+                if (value.isEmpty()) {
+                    field = value
+                    ReiKeyHelper.clearSuperKey()
+                    return
+                }
                 field = value
-                if (value.isNotEmpty()) {
-                    ReiKeyHelper.writeSuperKey(value)
+                ReiKeyHelper.writeSuperKey(value)
+                if (rootImplementation == VALUE_ROOT_IMPL_APATCH) {
+                    ApNatives.ready(value)
+                    ApNatives.resetSuPath(value, LEGACY_SU_PATH)
                 }
             }
 
-        /** Root impl: ksu = KernelSU only (no apd link), apatch = KernelPatch/APatch (create apd). */
+        /** 根实现：ksu=仅 KernelSU，apatch=KernelPatch/APatch。 */
         var rootImplementation: String
             get() = sharedPreferences.getString(KEY_ROOT_IMPL, VALUE_ROOT_IMPL_APATCH) ?: VALUE_ROOT_IMPL_APATCH
             set(value) {
                 sharedPreferences.edit { putString(KEY_ROOT_IMPL, value) }
             }
 
-        /** App language: empty = system, or BCP 47 tag (e.g. zh, zh-TW, en, ja, fr, ru, ko, es). */
+        /** 应用语言：空=系统，或 BCP 47 如 zh、en。 */
         var appLanguage: String
             get() = sharedPreferences.getString(KEY_APP_LANG, "") ?: ""
             set(value) {
@@ -52,6 +58,8 @@ class ReiApplication : Application() {
         const val KEY_APP_LANG = "app_lang"
         const val VALUE_ROOT_IMPL_KSU = "ksu"
         const val VALUE_ROOT_IMPL_APATCH = "apatch"
+
+        private const val LEGACY_SU_PATH = "/system/bin/su"
     }
 
     override fun onCreate() {
@@ -61,7 +69,6 @@ class ReiApplication : Application() {
         ReiKeyHelper.setSharedPreferences(this, SP_NAME)
         superKey = ReiKeyHelper.readSuperKey()
         applyAppLanguage()
-        // Init Murasaki: direct ksud or Zygisk bridge for Binder
         Thread { Murasaki.init(packageName) }.start()
     }
 

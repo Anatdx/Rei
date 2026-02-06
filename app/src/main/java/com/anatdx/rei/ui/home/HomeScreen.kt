@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -17,13 +19,16 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,7 +37,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +50,9 @@ import com.anatdx.rei.ApNatives
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.reid.ReidClient
+import com.anatdx.rei.core.reid.ReidInstallStatus
+import com.anatdx.rei.core.reid.ReidLauncher
+import com.anatdx.rei.core.reid.ReidStartResult
 import com.anatdx.rei.core.root.RootAccessState
 import com.anatdx.rei.ui.util.getSELinuxStatus
 import com.anatdx.rei.ui.auth.AuthLevel
@@ -92,6 +99,13 @@ fun HomeScreen(
                 item {
                     KpReadyHintCard(onOpenSettings = onOpenSettings)
                 }
+            }
+            item {
+                SystemPatchCard(
+                    rootAccessState = rootAccessState,
+                    refreshTrigger = refreshKey,
+                    onRefreshRoot = onRefreshRoot,
+                )
             }
             item {
                 MurasakiStatusCard(packageName = LocalContext.current.packageName, refreshTrigger = refreshKey)
@@ -169,10 +183,15 @@ private fun SystemStatusCard(rootAccessState: RootAccessState, refreshTrigger: I
                 }
             }
             sys = sys.copy(kernel = kernel, selinux = selinux, ksu = ksu, kpReady = kpReady, kpVersion = kpVersion)
+            // 自动探测当前后端：KP 超级密钥通过则用 apatch，否则 KSU 有 fd/ksu-info 则用 ksu
+            when {
+                kpReady -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
+                ksu.isNotBlank() -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
+            }
         }
     }
 
-    LaunchedEffect(Unit, refreshTrigger) { refresh() }
+    LaunchedEffect(ReiApplication.superKey, refreshTrigger) { refresh() }
 
     val (rootChip, rootIcon) = when (rootAccessState) {
         RootAccessState.Requesting -> stringResource(R.string.home_root_requesting) to Icons.Outlined.Info
@@ -251,6 +270,110 @@ private fun formatKpVersion(ver: Long): String {
 }
 
 @Composable
+private fun SystemPatchCard(
+    rootAccessState: RootAccessState,
+    refreshTrigger: Int,
+    onRefreshRoot: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var installStatus by remember { mutableStateOf<ReidInstallStatus>(ReidInstallStatus.Unknown) }
+    var isInstalling by remember { mutableStateOf(false) }
+    var installError by remember { mutableStateOf<String?>(null) }
+
+    fun refreshStatus() {
+        scope.launch {
+            installStatus = ReidLauncher.getInstallStatus(ctx)
+            installError = null
+        }
+    }
+
+    LaunchedEffect(Unit, refreshTrigger) {
+        if (rootAccessState is RootAccessState.Granted) {
+            installStatus = ReidLauncher.getInstallStatus(ctx)
+        } else {
+            installStatus = ReidInstallStatus.Unknown
+        }
+        installError = null
+    }
+
+    val statusText = when (installStatus) {
+        is ReidInstallStatus.Unknown -> stringResource(R.string.home_system_patch_status_unknown)
+        is ReidInstallStatus.NotInstalled -> stringResource(R.string.home_system_patch_not_installed)
+        is ReidInstallStatus.Installed -> {
+            val ver = (installStatus as ReidInstallStatus.Installed).versionLine
+            if (!ver.isNullOrBlank()) stringResource(R.string.home_system_patch_installed_version, ver)
+            else stringResource(R.string.home_system_patch_installed)
+        }
+    }
+
+    ReiCard {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.home_system_patch_title)) },
+                supportingContent = {
+                    Column {
+                        Text(statusText)
+                        installError?.let { err ->
+                            Text(
+                                text = stringResource(R.string.home_system_patch_install_failed, err),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                },
+                leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            if (rootAccessState is RootAccessState.Granted) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (isInstalling) return@OutlinedButton
+                            isInstalling = true
+                            installError = null
+                            scope.launch {
+                                val result = ReidLauncher.start(ctx)
+                                isInstalling = false
+                                when (result) {
+                                    is ReidStartResult.Started -> {
+                                        refreshStatus()
+                                        onRefreshRoot()
+                                    }
+                                    is ReidStartResult.Failed -> {
+                                        installError = result.reason
+                                        refreshStatus()
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isInstalling,
+                    ) {
+                        if (isInstalling) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            if (isInstalling) stringResource(R.string.home_system_patch_install_installing)
+                            else stringResource(R.string.home_system_patch_install_btn)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SuperKeyPromptCard(onOpenSettings: () -> Unit) {
     ReiCard {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -287,9 +410,7 @@ private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
         } else null
     }
     when (kpReady) {
-        true -> {
-            // KP ready: optional hint or no card
-        }
+        true -> { }
         false -> {
             ReiCard {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -319,7 +440,7 @@ private fun KpReadyHintCard(onOpenSettings: () -> Unit) {
                 }
             }
         }
-        null -> { /* detecting, no card */ }
+        null -> { }
     }
 }
 

@@ -28,7 +28,11 @@ Java_com_anatdx_rei_ApNatives_nativeReady(JNIEnv *env, jclass clazz, jstring sup
     if (!super_key_jstr) return JNI_FALSE;
     const char *key = env->GetStringUTFChars(super_key_jstr, nullptr);
     if (!key) return JNI_FALSE;
-    jboolean result = sc_ready(key) ? JNI_TRUE : JNI_FALSE;
+    long hello_ret = sc_hello(key);
+    jboolean result = (hello_ret == SUPERCALL_HELLO_MAGIC) ? JNI_TRUE : JNI_FALSE;
+    if (!result) {
+        LOGE("nativeReady: sc_hello returned %ld (expect " "0x11581158)", hello_ret);
+    }
     env->ReleaseStringUTFChars(super_key_jstr, key);
     return result;
 }
@@ -185,6 +189,9 @@ Java_com_anatdx_rei_ApNatives_nativeResetSuPath(JNIEnv *env, jclass clazz,
     long rc = sc_su_reset_path(key, path);
     env->ReleaseStringUTFChars(super_key_jstr, key);
     env->ReleaseStringUTFChars(su_path_jstr, path);
+    if (rc != 0) {
+        LOGE("nativeResetSuPath path=%s rc=%ld (kernel may not support sc 0x1111)", path, rc);
+    }
     return (rc == 0) ? JNI_TRUE : JNI_FALSE;
 }
 

@@ -15,9 +15,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * APatch-style superkey storage: encrypted in SharedPreferences via Android Keystore.
- */
+/** 超级密钥存储：Keystore 加密，不可用时明文回退。 */
 object ReiKeyHelper {
     private const val TAG = "ReiKeyHelper"
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
@@ -25,6 +23,7 @@ object ReiKeyHelper {
     private const val ENCRYPT_MODE = "AES/GCM/NoPadding"
     private const val SUPER_KEY_ENC = "super_key_enc"
     private const val SUPER_KEY_IV = "super_key_iv"
+    private const val SUPER_KEY_PLAIN = "super_key_plain"
     private const val SKIP_STORE_SUPER_KEY = "skip_store_super_key"
 
     @Volatile
@@ -124,6 +123,7 @@ object ReiKeyHelper {
         prefs?.edit()?.apply {
             remove(SUPER_KEY_ENC)
             remove(SUPER_KEY_IV)
+            remove(SUPER_KEY_PLAIN)
             apply()
         }
     }
@@ -139,14 +139,25 @@ object ReiKeyHelper {
         if (enc.isNotEmpty()) {
             decrypt(enc)?.let { return it }
         }
-        return ""
+        return p.getString(SUPER_KEY_PLAIN, "") ?: ""
     }
 
-    fun writeSuperKey(key: String) {
-        if (shouldSkipStoreSuperKey()) return
+    /** 持久化密钥；Keystore 可用则加密，否则明文。 */
+    fun writeSuperKey(key: String): Boolean {
+        if (shouldSkipStoreSuperKey()) return false
+        val p = prefs ?: return false
         encrypt(key)?.let { enc ->
-            prefs?.edit()?.putString(SUPER_KEY_ENC, enc)?.apply()
+            p.edit()
+                .putString(SUPER_KEY_ENC, enc)
+                .remove(SUPER_KEY_PLAIN)
+                .apply()
+            return true
         }
+        p.edit()
+            .putString(SUPER_KEY_PLAIN, key)
+            .remove(SUPER_KEY_ENC)
+            .apply()
+        return true
     }
 
     /** 8–63 位，且同时包含字母和数字 */

@@ -1,56 +1,49 @@
 package com.anatdx.rei
 
+import android.util.Log
 import androidx.annotation.Keep
 
-/**
- * APatch/KernelPatch supercall JNI: auth and elevate via superkey.
- * nativeReady checks KP backend; nativeSu elevates current thread to root via superkey.
- */
+/** KP 超级调用 JNI：鉴权与提权。 */
 object ApNatives {
-    init {
-        runCatching { System.loadLibrary("apjni") }
-    }
+    private val libLoaded: Boolean = runCatching { System.loadLibrary("apjni") }.fold(
+        onSuccess = { true },
+        onFailure = { e -> Log.e("Rei", "loadLibrary(apjni) failed", e); false }
+    )
 
-    /** Whether KP backend is ready (supercall auth ok). */
     @Keep
     external fun nativeReady(superKey: String): Boolean
 
-    /**
-     * Elevate current thread to toUid (usually 0=root) via superkey.
-     * @return 0 on success, negative errno
-     */
     @Keep
     external fun nativeSu(superKey: String, toUid: Int, scontext: String?): Long
 
-    /** Current su path (from KP backend). */
     @Keep
     external fun nativeSuPath(superKey: String): String
 
-    /** Reset su path in kernel (sc 0x1111); so authorized apps running su get root. Same as IcePatch. */
     @Keep
     private external fun nativeResetSuPath(superKey: String, path: String): Boolean
 
-    /** KernelPatch version (e.g. 0x000a0700 for 0.10.7). */
     @Keep
     external fun nativeKernelPatchVersion(superKey: String): Long
 
-    /** Diag string: hello, kp_ver, kernel_ver, build_time. */
     @Keep
     external fun nativeDiag(superKey: String): String
 
-    /** Allowed UID list (KP supercall 0x1102+0x1103), fallback. */
     @Keep
     external fun nativeSuUids(superKey: String): IntArray
 
-    /** Grant UID (KP supercall 0x1100), fallback. */
     @Keep
     external fun nativeGrantSu(superKey: String, uid: Int, toUid: Int, scontext: String?): Long
 
-    /** Revoke UID (KP supercall 0x1101), fallback. */
     @Keep
     external fun nativeRevokeSu(superKey: String, uid: Int): Long
 
-    fun ready(superKey: String): Boolean = runCatching { nativeReady(superKey) }.getOrElse { false }
+    fun ready(superKey: String): Boolean {
+        if (!libLoaded) return false
+        return runCatching { nativeReady(superKey) }.getOrElse { e ->
+            Log.e("Rei", "nativeReady failed", e)
+            false
+        }
+    }
     fun su(superKey: String, toUid: Int = 0, scontext: String? = null): Boolean =
         runCatching { nativeSu(superKey, toUid, scontext) == 0L }.getOrElse { false }
     fun suPath(superKey: String): String = runCatching { nativeSuPath(superKey) }.getOrElse { "" }

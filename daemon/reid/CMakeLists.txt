@@ -45,60 +45,6 @@ FetchContent_MakeAvailable(miniz)
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Android")
-  # Lua (for apd/KernelPatch module scripts)
-  FetchContent_Declare(
-      lua
-      URL https://www.lua.org/ftp/lua-5.5.0.tar.gz
-      URL_HASH SHA256=57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d
-  )
-  FetchContent_Populate(lua)
-  add_library(lua STATIC
-      ${lua_SOURCE_DIR}/src/lapi.c ${lua_SOURCE_DIR}/src/lcode.c ${lua_SOURCE_DIR}/src/lctype.c
-      ${lua_SOURCE_DIR}/src/ldebug.c ${lua_SOURCE_DIR}/src/ldo.c ${lua_SOURCE_DIR}/src/ldump.c
-      ${lua_SOURCE_DIR}/src/lfunc.c ${lua_SOURCE_DIR}/src/lgc.c ${lua_SOURCE_DIR}/src/llex.c
-      ${lua_SOURCE_DIR}/src/lmem.c ${lua_SOURCE_DIR}/src/lobject.c ${lua_SOURCE_DIR}/src/lopcodes.c
-      ${lua_SOURCE_DIR}/src/lparser.c ${lua_SOURCE_DIR}/src/lstate.c ${lua_SOURCE_DIR}/src/lstring.c
-      ${lua_SOURCE_DIR}/src/ltable.c ${lua_SOURCE_DIR}/src/ltm.c ${lua_SOURCE_DIR}/src/lundump.c
-      ${lua_SOURCE_DIR}/src/lvm.c ${lua_SOURCE_DIR}/src/lzio.c
-      ${lua_SOURCE_DIR}/src/lauxlib.c ${lua_SOURCE_DIR}/src/lbaselib.c ${lua_SOURCE_DIR}/src/lcorolib.c
-      ${lua_SOURCE_DIR}/src/ldblib.c ${lua_SOURCE_DIR}/src/liolib.c ${lua_SOURCE_DIR}/src/lmathlib.c
-      ${lua_SOURCE_DIR}/src/loslib.c ${lua_SOURCE_DIR}/src/lstrlib.c ${lua_SOURCE_DIR}/src/ltablib.c
-      ${lua_SOURCE_DIR}/src/lutf8lib.c ${lua_SOURCE_DIR}/src/loadlib.c ${lua_SOURCE_DIR}/src/linit.c
-  )
-  target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
-  target_compile_definitions(lua PRIVATE LUA_USE_POSIX LUA_USE_DLOPEN)
-  target_link_libraries(lua PRIVATE dl)
-
-  # APd version (for KernelPatch backend)
-  execute_process(
-      COMMAND git rev-list --count HEAD
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      OUTPUT_VARIABLE APD_GIT_COUNT
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  execute_process(
-      COMMAND git describe --tags --always
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      OUTPUT_VARIABLE APD_GIT_DESC
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  if(APD_GIT_COUNT STREQUAL "")
-      set(APD_GIT_COUNT "0")
-  endif()
-  if(APD_GIT_DESC STREQUAL "")
-      set(APD_GIT_DESC "0.0.0")
-  endif()
-  math(EXPR APD_VERSION_CODE "10000 + 200 + ${APD_GIT_COUNT}")
-  string(REGEX REPLACE "^v" "" APD_VERSION_NAME "${APD_GIT_DESC}")
-  set(APD_VERSION_HPP ${GENERATED_DIR}/apd_version.hpp)
-  configure_file(
-      ${CMAKE_SOURCE_DIR}/src/apd/version.hpp.in
-      ${APD_VERSION_HPP}
-      @ONLY
-  )
-endif()
-
 # Generate embedded assets
 set(ASSETS_DIR ${CMAKE_SOURCE_DIR}/assets)
 set(ASSETS_CPP ${GENERATED_DIR}/assets_data.cpp)
@@ -159,27 +105,41 @@ set(SOURCES
     ${ASSETS_CPP}
 )
 
-# APd static lib (KernelPatch/APatch backend) - full implementation only on Android
+# Android：单二进制 reid = reid + apd + ksud（硬链接 apd/ksud 同 inode），切换需重启。
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
-  set(APD_SOURCES
-      src/apd/apd.cpp src/apd/cli.cpp src/apd/defs.cpp src/apd/log.cpp src/apd/utils.cpp
-      src/apd/assets.cpp src/apd/supercall.cpp src/apd/package.cpp src/apd/module.cpp
-      src/apd/metamodule.cpp src/apd/event.cpp src/apd/sepolicy.cpp src/apd/restorecon.cpp
+  set(APD_VERSION_CODE "0")
+  set(APD_VERSION_NAME "reid-apd-ksud")
+  set(APD_VERSION_HPP ${GENERATED_DIR}/apd_version.hpp)
+  configure_file(
+      ${CMAKE_SOURCE_DIR}/src/apd/version.hpp.in
+      ${APD_VERSION_HPP}
+      @ONLY
+  )
+  set(APD_SUPERCALL_SOURCES
+      src/apd/supercall.cpp
+      src/apd/log.cpp
+      src/apd/utils.cpp
+      src/apd/package.cpp
+      src/apd/defs.cpp
+  )
+  add_library(reid_apd_supercall STATIC ${APD_SUPERCALL_SOURCES})
+  target_include_directories(reid_apd_supercall PUBLIC ${CMAKE_SOURCE_DIR}/src/apd ${GENERATED_DIR})
+  target_link_libraries(reid_apd_supercall PRIVATE log)
+  # 完整 apd CLI 并入 reid，供 argv[0]==apd 时使用
+  list(APPEND SOURCES
+      src/apd/cli.cpp
+      src/apd/event.cpp
+      src/apd/module.cpp
+      src/apd/metamodule.cpp
+      src/apd/sepolicy.cpp
       src/apd/pty.cpp
+      src/apd/restorecon.cpp
+      src/apd/assets.cpp
+      src/apd/apd.cpp
   )
-  add_library(reid_apd STATIC ${APD_SOURCES})
-  target_include_directories(reid_apd PUBLIC
-      ${CMAKE_SOURCE_DIR}/src/apd
-      ${GENERATED_DIR}
-  )
-  target_compile_definitions(reid_apd PRIVATE APD_USE_LUA)
-  target_link_libraries(reid_apd PRIVATE lua)
-else()
-  add_library(reid_apd STATIC src/apd_stub.cpp)
-  target_include_directories(reid_apd PUBLIC ${CMAKE_SOURCE_DIR}/src)
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/src/ksud ${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/src/ksud ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/apd)
 include_directories(${picosha2_SOURCE_DIR})
 include_directories(${miniz_SOURCE_DIR})
 include_directories(${GENERATED_DIR})
@@ -190,11 +150,11 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_link_libraries(reid PRIVATE pthread)
 endif()
 
-# Android: dl for dynamic loading, log for apd logging (__android_log_vprint)
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_link_libraries(reid PRIVATE dl log)
+    target_link_libraries(reid PRIVATE reid_apd_supercall)
 endif()
 
-target_link_libraries(reid PRIVATE z miniz reid_apd)
+target_link_libraries(reid PRIVATE z miniz)
 
 install(TARGETS reid DESTINATION bin)

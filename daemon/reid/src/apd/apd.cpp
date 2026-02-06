@@ -4,6 +4,7 @@
 #include "log.hpp"
 #include "pty.hpp"
 #include "utils.hpp"
+#include "../defs.hpp"
 
 #include <cerrno>
 #include <cstring>
@@ -137,7 +138,8 @@ int RootShell(int argc, char** argv) {
     free_idx = 1;
   }
 
-  uid_t uid = getuid();
+  const uid_t caller_uid = getuid();
+  uid_t uid = caller_uid;
   gid_t gid = getgid();
   if (free_idx < free_args.size()) {
     const std::string& name = free_args[free_idx];
@@ -183,6 +185,13 @@ int RootShell(int argc, char** argv) {
   if (FileExists(kGlobalNamespaceFile) || mount_master) {
     SwitchMntNs(1);
   }
+
+  // APatch: su path 由管理器 resetSuPath 设置，密钥只在 app 存储不落盘。执行 su 时由内核根据白名单提权，本进程应已是 root。
+  if (geteuid() != 0) {
+    LOGE("RootShell: not root (euid=%u), kernel did not elevate", geteuid());
+    return 1;
+  }
+
   SetIdentity(uid, gid);
 
   std::vector<char*> args;

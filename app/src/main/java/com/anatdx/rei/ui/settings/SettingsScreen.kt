@@ -81,12 +81,14 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import android.app.Activity
 import com.anatdx.rei.R
+import com.anatdx.rei.ApNatives
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.reid.ReidClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import android.widget.Toast
 
 @Composable
 fun SettingsScreen(
@@ -425,9 +427,11 @@ private fun AppearanceCard(
 
 @Composable
 private fun RootImplCard() {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val rootImpl = ReiApplication.rootImplementation
+    val backendLabel = when (rootImpl) {
+        ReiApplication.VALUE_ROOT_IMPL_KSU -> stringResource(R.string.home_root_impl_ksu)
+        else -> stringResource(R.string.home_root_impl_kp)
+    }
 
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -437,64 +441,19 @@ private fun RootImplCard() {
                 leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = rootImpl == ReiApplication.VALUE_ROOT_IMPL_KSU,
-                    onClick = {
-                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                ReidClient.execReid(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
-                            }
-                        }
-                    },
-                )
-                Text(
-                    "KernelSU",
-                    modifier = Modifier.clickable {
-                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                ReidClient.execReid(ctx, listOf("set-root-impl", "ksu"), timeoutMs = 5_000L)
-                            }
-                        }
-                    },
-                )
-                Spacer(Modifier.padding(horizontal = 24.dp))
-                RadioButton(
-                    selected = rootImpl == ReiApplication.VALUE_ROOT_IMPL_APATCH,
-                    onClick = {
-                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                ReidClient.execReid(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
-                            }
-                        }
-                    },
-                )
-                Text(
-                    "KernelPatch (APatch)",
-                    modifier = Modifier.clickable {
-                        ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                ReidClient.execReid(ctx, listOf("set-root-impl", "apatch"), timeoutMs = 5_000L)
-                            }
-                        }
-                    },
-                )
-            }
+            ListItem(
+                headlineContent = { Text(backendLabel) },
+                supportingContent = { Text(stringResource(R.string.settings_root_impl_auto)) },
+                leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
         }
     }
 }
 
 @Composable
 private fun SuperkeyCard() {
+    val ctx = LocalContext.current
     var input by rememberSaveable { mutableStateOf(ReiApplication.superKey) }
     var keyVisible by rememberSaveable { mutableStateOf(false) }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -567,7 +526,6 @@ private fun SuperkeyCard() {
                     onClick = {
                         if (input.isEmpty()) {
                             ReiApplication.superKey = ""
-                            ReiKeyHelper.clearSuperKey()
                             validationError = null
                             return@TextButton
                         }
@@ -576,8 +534,8 @@ private fun SuperkeyCard() {
                             return@TextButton
                         }
                         ReiApplication.superKey = input
-                        ReiKeyHelper.writeSuperKey(input)
                         validationError = null
+                        Toast.makeText(ctx, ctx.getString(R.string.settings_superkey_saved), Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Text(stringResource(R.string.settings_save))

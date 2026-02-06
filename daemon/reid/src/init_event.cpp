@@ -277,6 +277,8 @@ void on_boot_completed() {
 int run_daemon() {
     LOGI("Starting ksud daemon...");
 
+    (void)ensure_dir_exists(REI_DIR);
+
     // Switch to global mount namespace
     // This is crucial for visibility across Apps
     if (!switch_mnt_ns(1)) {

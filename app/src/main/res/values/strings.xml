@@ -38,6 +38,14 @@
     <string name="home_redetect_root_desc">Re-request access and refresh status</string>
     <string name="home_partition_manager">Partition Manager</string>
     <string name="home_partition_manager_desc">View, backup, flash partitions; manage A/B slots</string>
+    <string name="home_system_patch_title">System patch (reid)</string>
+    <string name="home_system_patch_not_installed">Not installed</string>
+    <string name="home_system_patch_installed">Installed</string>
+    <string name="home_system_patch_installed_version">Installed · %1$s</string>
+    <string name="home_system_patch_install_btn">Install system patch</string>
+    <string name="home_system_patch_install_installing">Installing…</string>
+    <string name="home_system_patch_install_failed">Install failed: %1$s</string>
+    <string name="home_system_patch_status_unknown">Unknown (need root to check)</string>
 
     <!-- Logs -->
     <string name="logs_filter_all">All</string>
@@ -72,7 +80,8 @@
     <string name="settings_ui_opacity">UI opacity</string>
     <string name="settings_ui_opacity_desc">Card / Footer / Edge (linked)</string>
     <string name="settings_root_impl">Root implementation</string>
-    <string name="settings_root_impl_desc">KernelSU or KernelPatch/APatch: create ksud or apd link only.</string>
+    <string name="settings_root_impl_desc">Backend is auto-detected: KernelSU when root has ksud; KernelPatch when superkey passes.</string>
+    <string name="settings_root_impl_auto">Auto-detected (no manual switch).</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">Set (for AP/KernelPatch auth)</string>
     <string name="settings_superkey_hint_short">Enter super key if KP backend installed. 8–63 chars, letters and digits.</string>
@@ -82,6 +91,9 @@
     <string name="settings_visibility_hide">Hide</string>
     <string name="settings_visibility_show">Show</string>
     <string name="settings_save">Save</string>
+    <string name="settings_superkey_saved">SuperKey saved</string>
+    <string name="settings_superkey_save_failed">Save failed (check device security or retry)</string>
+    <string name="settings_superkey_auth_failed">KP auth failed (wrong key or no KP backend)</string>
     <string name="settings_manage">Manage</string>
     <string name="settings_manage_desc">Logs / Boot tools / KP patch</string>
     <string name="settings_logs_desc">App logs and command output</string>

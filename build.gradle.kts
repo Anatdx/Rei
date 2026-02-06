@@ -9,6 +9,11 @@ plugins {
 val androidCompileSdkVersion = 36
 val androidMinSdkVersion = 24
 val androidTargetSdkVersion = 36
+rootProject.extra["androidCompileSdkVersion"] = androidCompileSdkVersion
+rootProject.extra["androidMinSdkVersion"] = androidMinSdkVersion
+rootProject.extra["androidTargetSdkVersion"] = androidTargetSdkVersion
+
+// Rei 唯一后端：reid = apd + ksud 合一（单二进制，按 argv[0] 分发；安装时硬链接为 reid/apd/ksud）
 
 subprojects {
     plugins.withId("com.android.library") {
