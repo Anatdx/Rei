@@ -10,6 +10,7 @@ import io.murasaki.server.IMurasakiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.lang.reflect.Method
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
@@ -102,7 +103,7 @@ object ReidClient {
                     ReidExecResult(0, "[${uids.joinToString(",")}]")
                 }
                 args.size >= 2 && args[0] == "profile" && args[1] == "denylist" -> {
-                    val uids = service?.getDenyUids() ?: return@runCatching null
+                    val uids = invokeGetDenyUids(service) ?: return@runCatching null
                     ReidExecResult(0, "[${uids.joinToString(",")}]")
                 }
                 args.size >= 5 && args[0] == "profile" && args[1] == "set-allow" -> {
@@ -110,14 +111,14 @@ object ReidClient {
                     val pkg = args[3]
                     val allowSu = args[4] == "1"
                     val json = """{"name":"${pkg.replace("\"", "\\\"")}","currentUid":$uid,"allowSu":$allowSu,"umountModules":${!allowSu}}"""
-                    val ok = service?.setAppProfile(uid, json) == true
+                    val ok = invokeSetAppProfile(service, uid, json) == true
                     if (ok) ReidExecResult(0, "") else ReidExecResult(1, "setAppProfile failed")
                 }
                 args.size >= 4 && args[0] == "allowlist" && args[1] == "grant" -> {
                     val uid = args[2].toIntOrNull() ?: return@runCatching null
                     val pkg = args[3]
                     val json = """{"name":"${pkg.replace("\"", "\\\"")}","currentUid":$uid,"allowSu":true}"""
-                    val ok = service?.setAppProfile(uid, json) == true
+                    val ok = invokeSetAppProfile(service, uid, json) == true
                     if (ok) ReidExecResult(0, "") else ReidExecResult(1, "setAppProfile failed")
                 }
                 else -> null
@@ -126,6 +127,25 @@ object ReidClient {
             ReiLog.append(context, ReiLogLevel.W, "reid", "Murasaki profile: ${e.message}")
             null
         }
+    }
+
+    /** Invoke getDenyUids via reflection for compatibility with older murasaki-api AIDL (e.g. submodule). */
+    private fun invokeGetDenyUids(service: IMurasakiService?): IntArray? {
+        if (service == null) return null
+        return runCatching {
+            val m: Method = service.javaClass.getMethod("getDenyUids")
+            @Suppress("UNCHECKED_CAST")
+            (m.invoke(service) as? IntArray) ?: return@runCatching null
+        }.getOrNull()
+    }
+
+    /** Invoke setAppProfile via reflection for compatibility with older murasaki-api AIDL (e.g. submodule). */
+    private fun invokeSetAppProfile(service: IMurasakiService?, uid: Int, profileJson: String): Boolean? {
+        if (service == null) return null
+        return runCatching {
+            val m: Method = service.javaClass.getMethod("setAppProfile", Int::class.javaPrimitiveType, String::class.java)
+            m.invoke(service, uid, profileJson) as? Boolean
+        }.getOrNull()
     }
 
     /** Run command with root via su -c (same as apd: authorized apps run su to get shell). */
