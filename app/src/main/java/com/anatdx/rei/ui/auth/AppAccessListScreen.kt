@@ -40,8 +40,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -60,6 +62,10 @@ import com.anatdx.rei.ui.components.ReiCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.ViewModel
 
 private data class AppEntry(
     val packageName: String,
@@ -72,28 +78,37 @@ private data class AppEntry(
 
 @Composable
 fun AppAccessListScreen() {
+    val viewModel = viewModel<AppAccessViewModel>()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
+    val cachedEntries by viewModel.entries.collectAsState()
+    val cachedStats by viewModel.stats.collectAsState()
+    val cachedError by viewModel.error.collectAsState()
+    var apps by remember(cachedEntries) { mutableStateOf(cachedEntries ?: emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var stats by remember { mutableStateOf(AuthStats()) }
+    var stats by remember(cachedStats) { mutableStateOf(cachedStats ?: AuthStats()) }
     var search by remember { mutableStateOf("") }
     var showSystemApps by remember { mutableStateOf(false) }
-    var lastError by remember { mutableStateOf<String?>(null) }
+    var lastError by remember(cachedError) { mutableStateOf(cachedError) }
     var pending by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     suspend fun refresh() {
         loading = true
         val r = withContext(Dispatchers.IO) { queryManagerViewDirect(ctx) }
+        viewModel.setEntries(r.entries)
+        viewModel.setStats(r.stats)
+        viewModel.setError(r.error)
         apps = r.entries
         stats = r.stats
         lastError = r.error
         loading = false
     }
 
-    LaunchedEffect(Unit) {
-        refresh()
+    // 有缓存时直接展示；无缓存时开屏自动加载
+    LaunchedEffect(cachedEntries) {
+        if (cachedEntries != null) loading = false
+        else scope.launch { refresh() }
     }
 
     val filtered = remember(apps, search, showSystemApps) {
@@ -392,6 +407,20 @@ private data class AuthStats(
     val grantedCount: Int = 0,
     val denylistCount: Int = 0,
 )
+
+/** 授权列表缓存：切回授权页时直接展示，下拉刷新更新 */
+private class AppAccessViewModel : ViewModel() {
+    private val _entries = MutableStateFlow<List<AppEntry>?>(null)
+    val entries: StateFlow<List<AppEntry>?> = _entries.asStateFlow()
+    private val _stats = MutableStateFlow<AuthStats?>(null)
+    val stats: StateFlow<AuthStats?> = _stats.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun setEntries(list: List<AppEntry>) { _entries.value = list }
+    fun setStats(s: AuthStats) { _stats.value = s }
+    fun setError(e: String?) { _error.value = e }
+}
 
 private data class ManagerViewResult(
     val entries: List<AppEntry>,

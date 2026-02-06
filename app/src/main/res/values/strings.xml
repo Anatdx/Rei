@@ -71,7 +71,7 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_dynamic_color">Dynamic color (Android 12+)</string>
-    <string name="settings_dynamic_color_desc">Follow system wallpaper when on (accent preset disabled)</string>
+    <string name="settings_dynamic_color_desc">When on, follow system wallpaper colors</string>
     <string name="settings_preset_ice_blue">Ice Blue</string>
     <string name="settings_preset_emerald">Emerald</string>
     <string name="settings_preset_sunset">Sunset</string>
@@ -86,8 +86,6 @@
     <string name="settings_ui_opacity">UI opacity</string>
     <string name="settings_ui_opacity_desc">Card / Footer / Edge (linked)</string>
     <string name="settings_root_impl">Root implementation</string>
-    <string name="settings_root_impl_desc">Backend is auto-detected: KernelSU when root has ksud; KernelPatch when superkey passes.</string>
-    <string name="settings_root_impl_auto">Auto-detected (no manual switch).</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">Set (for AP/KernelPatch auth)</string>
     <string name="settings_superkey_hint_short">Enter super key if KP backend installed. 8–63 chars, letters and digits.</string>
@@ -312,7 +310,7 @@
     <string name="murasaki_retry">Retry</string>
     <string name="murasaki_level_shell">SHELL (Shizuku compatible)</string>
     <string name="murasaki_level_root">ROOT (Sui compatible)</string>
-    <string name="murasaki_level_kernel">KERNEL (Murasaki only)</string>
+    <string name="murasaki_level_kernel">KERNEL</string>
     <string name="murasaki_level_unknown">Unknown (%d)</string>
 
     <!-- Auth (authorize dialog) -->
@@ -324,7 +322,7 @@
     <string name="auth_level_basic_desc">Restricted capabilities only (currently same as no su)</string>
     <string name="auth_murasaki_request_message">This app is requesting Murasaki/Shizuku access. Allowing will add it to the allowlist.</string>
     <string name="auth_request_level_title">Requested permission level</string>
-    <string name="auth_remember_choice">Remember choice (do not ask again)</string>
+    <string name="auth_remember_choice">Remember choice</string>
     <string name="auth_deny">Deny</string>
     <string name="auth_once">Once</string>
     <string name="auth_allow">Allow</string>

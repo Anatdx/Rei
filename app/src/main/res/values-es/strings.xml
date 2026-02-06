@@ -38,6 +38,20 @@
     <string name="home_redetect_root_desc">Solicitar acceso de nuevo y actualizar estado</string>
     <string name="home_partition_manager">Gestor de particiones</string>
     <string name="home_partition_manager_desc">Ver, respaldar, flashear particiones; gestionar slots A/B</string>
+    <string name="home_system_patch_title">Parche de sistema (reid)</string>
+    <string name="home_system_patch_not_installed">No instalado</string>
+    <string name="home_system_patch_installed">Instalado</string>
+    <string name="home_system_patch_installed_version">Instalado · %1$s</string>
+    <string name="home_system_patch_install_btn">Instalar parche de sistema</string>
+    <string name="home_system_patch_install_installing">Instalando…</string>
+    <string name="home_system_patch_install_failed">Error de instalación: %1$s</string>
+    <string name="home_system_patch_uninstall_btn">Desinstalar parche de sistema</string>
+    <string name="home_system_patch_uninstall_uninstalling">Desinstalando…</string>
+    <string name="home_system_patch_uninstall_failed">Error al desinstalar: %1$s</string>
+    <string name="home_system_patch_status_unknown">Desconocido (se requiere root)</string>
+    <string name="home_metamodule_implement">Implementación metamódulo</string>
+    <string name="home_zygisk_implement">Implementación Zygisk</string>
+    <string name="home_module_impl_none">—</string>
 
     <!-- Logs -->
     <string name="logs_filter_all">Todo</string>
@@ -71,8 +85,7 @@
     <string name="settings_overlay">Overlay</string>
     <string name="settings_ui_opacity">UI opacity</string>
     <string name="settings_ui_opacity_desc">Card / Footer / Edge (linked)</string>
-    <string name="settings_root_impl">Root implementation</string>
-    <string name="settings_root_impl_desc">KernelSU or KernelPatch/APatch: create ksud or apd link only.</string>
+    <string name="settings_root_impl">Implementación Root</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">Set (for AP/KernelPatch auth)</string>
     <string name="settings_superkey_hint_short">Enter super key if KP backend installed. 8–63 chars, letters and digits.</string>
@@ -81,8 +94,11 @@
     <string name="settings_superkey_validation">8–63 chars, letters and digits</string>
     <string name="settings_visibility_hide">Hide</string>
     <string name="settings_visibility_show">Show</string>
-    <string name="settings_save">Save</string>
-    <string name="settings_manage">Manage</string>
+    <string name="settings_save">Guardar</string>
+    <string name="settings_superkey_saved">SuperKey guardada</string>
+    <string name="settings_superkey_save_failed">Error al guardar (compruebe la seguridad del dispositivo o reintente)</string>
+    <string name="settings_superkey_auth_failed">Error de auth KP (clave incorrecta o backend KP no instalado)</string>
+    <string name="settings_manage">Gestionar</string>
     <string name="settings_manage_desc">Logs / Boot tools / KP patch</string>
     <string name="settings_logs_desc">App logs and command output</string>
     <string name="settings_partition_manager_desc">View, backup, flash partitions; manage A/B slots</string>
@@ -195,11 +211,20 @@
     <string name="modules_pending_install">Pending install</string>
     <string name="modules_undo_uninstall">Undo uninstall</string>
     <string name="modules_uninstall">Uninstall</string>
-    <string name="modules_has_update">Update available</string>
+    <string name="modules_has_update">Actualización disponible</string>
+    <string name="modules_install_confirm_title">Instalar módulo</string>
+    <string name="modules_install_confirm_message">¿Instalar «%1$s»?\n\nSe ejecutará el script de instalación estándar (customize.sh).</string>
+    <string name="modules_install_install_btn">Instalar</string>
+    <string name="modules_install_running">Instalando…</string>
+    <string name="modules_install_success">Instalación correcta</string>
+    <string name="modules_install_failed">Error (exit=%d)</string>
+    <string name="modules_install_output">Salida de instalación</string>
+    <string name="modules_install_close">Cerrar</string>
 
     <!-- App Access (extra) -->
-    <string name="app_access_list_title">App access list</string>
-    <string name="app_access_loading">Loading app list…</string>
+    <string name="app_access_list_title">Lista de acceso a apps</string>
+    <string name="app_access_murasaki_hint">Root y Murasaki/Shizuku comparten esta lista.</string>
+    <string name="app_access_loading">Cargando lista de apps…</string>
     <string name="app_access_visible_stats">Visible %1$d/%2$d (granted %3$d; allow=%4$d; exclude=%5$d)</string>
     <string name="app_access_excluded_label">Excluded (module changes)</string>
     <string name="app_access_exclude_mod_switch">Exclude module changes</string>

@@ -1,5 +1,5 @@
 // Murasaki Service - Binder Service Implementation
-// KernelSU kernel API server
+// KernelSU kernel API server: app calls kernel via Java/Binder (or Unix socket) -> daemon -> ioctl
 
 #include "murasaki_service.hpp"
 #include "../ksud/ksucalls.hpp"
@@ -16,6 +16,10 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <sstream>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
 
 namespace ksud {
 namespace murasaki {
@@ -42,13 +46,11 @@ static int get_ksu_version() {
 }
 
 static bool is_uid_granted_root(int uid) {
-    // TODO: check via ioctl
-    return uid == 0;
+    return ksud::uid_granted_root(static_cast<uint32_t>(uid));
 }
 
 static bool is_uid_should_umount(int uid) {
-    // TODO: check via ioctl
-    return false;
+    return ksud::uid_should_umount(static_cast<uint32_t>(uid));
 }
 
 static bool apply_sepolicy_rules(const std::string& rules) {
@@ -174,13 +176,117 @@ std::string MurasakiService::hymoGetActiveRules() {
 // ==================== KSU ops ====================
 
 std::string MurasakiService::getAppProfile(int uid) {
-    // TODO: get from profile module
-    return "";
+    return getAppProfile(uid, "");
+}
+
+std::string MurasakiService::getAppProfile(int uid, const std::string& key) {
+    auto profile = ksud::get_app_profile(static_cast<uint32_t>(uid), key);
+    if (!profile) {
+        return "";
+    }
+    std::ostringstream os;
+    os << "{\"key\":\"" << profile->key << "\",\"currentUid\":" << profile->current_uid
+       << ",\"allowSu\":" << (profile->allow_su ? "true" : "false");
+    if (!profile->allow_su) {
+        os << ",\"umountModules\":" << (profile->non_root.umount_modules ? "true" : "false");
+    }
+    os << "}";
+    return os.str();
+}
+
+// Minimal JSON-style parse for setAppProfile: extract "name"/"key", "currentUid", "allowSu", "umountModules"
+static bool parse_bool(const std::string& json, const char* key, bool default_val) {
+    std::string pattern = std::string("\"") + key + "\":";
+    size_t pos = json.find(pattern);
+    if (pos == std::string::npos)
+        return default_val;
+    pos += pattern.size();
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+        pos++;
+    if (pos < json.size() && (json[pos] == 't' || json[pos] == 'T'))
+        return true;
+    if (pos < json.size() && (json[pos] == 'f' || json[pos] == 'F'))
+        return false;
+    return default_val;
+}
+
+static int parse_int(const std::string& json, const char* key, int default_val) {
+    std::string pattern = std::string("\"") + key + "\":";
+    size_t pos = json.find(pattern);
+    if (pos == std::string::npos)
+        return default_val;
+    pos += pattern.size();
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+        pos++;
+    if (pos >= json.size())
+        return default_val;
+    unsigned char c = static_cast<unsigned char>(json[pos]);
+    if (!std::isdigit(c) && json[pos] != '-' && json[pos] != '+')
+        return default_val;
+    return static_cast<int>(strtol(json.c_str() + pos, nullptr, 10));
+}
+
+static std::string parse_string(const std::string& json, const char* key) {
+    std::string pattern = std::string("\"") + key + "\":\"";
+    size_t pos = json.find(pattern);
+    if (pos == std::string::npos) {
+        pattern = std::string("\"") + key + "\": \"";
+        pos = json.find(pattern);
+        if (pos == std::string::npos)
+            return "";
+        pos += pattern.size();
+    } else {
+        pos += pattern.size();
+    }
+    size_t end = pos;
+    while (end < json.size() && json[end] != '"') {
+        if (json[end] == '\\' && end + 1 < json.size())
+            end++;
+        end++;
+    }
+    return json.substr(pos, end - pos);
 }
 
 int MurasakiService::setAppProfile(int uid, const std::string& profileJson) {
-    // TODO: set profile
-    return -ENOSYS;
+    if (profileJson.empty()) {
+        return -EINVAL;
+    }
+    std::string key = parse_string(profileJson, "name");
+    if (key.empty()) {
+        key = parse_string(profileJson, "key");
+    }
+    if (key.empty()) {
+        LOGW("MurasakiService::setAppProfile: missing name/key in JSON");
+        return -EINVAL;
+    }
+    int current_uid = parse_int(profileJson, "currentUid", uid);
+    bool allow_su = parse_bool(profileJson, "allowSu", false);
+    bool umount_modules = parse_bool(profileJson, "umountModules", true);
+
+    ksud::AppProfile profile;
+    memset(&profile, 0, sizeof(profile));
+    profile.version = KSU_APP_PROFILE_VER;
+    strncpy(profile.key, key.c_str(), KSU_MAX_PACKAGE_NAME - 1);
+    profile.key[KSU_MAX_PACKAGE_NAME - 1] = '\0';
+    profile.current_uid = static_cast<int32_t>(current_uid);
+    profile.allow_su = allow_su ? 1 : 0;
+
+    if (allow_su) {
+        profile.root.uid = 0;
+        profile.root.gid = 0;
+        profile.root.groups_count = 0;
+        strncpy(profile.root.selinux_domain, "u:r:su:s0", KSU_SELINUX_DOMAIN - 1);
+        profile.root.namespaces = 0;
+    } else {
+        profile.non_root.umount_modules = umount_modules ? 1 : 0;
+    }
+
+    int ret = ksud::set_app_profile(profile);
+    if (ret < 0) {
+        LOGE("MurasakiService::setAppProfile set_app_profile failed: %d", ret);
+        return ret;
+    }
+    return 0;
 }
 
 bool MurasakiService::isUidGrantedRoot(int uid) {
@@ -196,8 +302,10 @@ int MurasakiService::injectSepolicy(const std::string& rules) {
 }
 
 int MurasakiService::addTryUmount(const std::string& path) {
-    // TODO: implement
-    return -ENOSYS;
+    if (path.empty()) {
+        return -EINVAL;
+    }
+    return ksud::umount_list_add(path, 0);
 }
 
 int MurasakiService::nukeExt4Sysfs() {

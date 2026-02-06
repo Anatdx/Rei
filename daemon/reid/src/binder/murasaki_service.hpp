@@ -70,8 +70,9 @@ public:
     int hymoFixMounts();
     std::string hymoGetActiveRules();
 
-    // KSU 操作
+    // KSU 操作（直接转发到内核 ioctl）
     std::string getAppProfile(int uid);
+    std::string getAppProfile(int uid, const std::string& key);
     int setAppProfile(int uid, const std::string& profileJson);
     bool isUidGrantedRoot(int uid);
     bool shouldUmountForUid(int uid);

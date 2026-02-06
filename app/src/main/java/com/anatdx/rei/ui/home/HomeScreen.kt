@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.anatdx.rei.R
 import com.anatdx.rei.core.log.ReiLog
 import com.anatdx.rei.ApNatives
@@ -71,11 +73,17 @@ fun HomeScreen(
     rootAccessState: RootAccessState,
     onRefreshRoot: () -> Unit,
     onOpenSettings: () -> Unit,
+    viewModel: HomeViewModel = viewModel(),
 ) {
-    var refreshKey by remember { mutableStateOf(0) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var rootImpl by remember { mutableStateOf(ReiApplication.rootImplementation) }
-    var systemPatchStatus by remember { mutableStateOf<ReidInstallStatus>(ReidInstallStatus.Unknown) }
+    val systemStatus by viewModel.systemStatus.collectAsState()
+    val murasakiStatus by viewModel.murasakiStatus.collectAsState()
+    val hymoFsStatus by viewModel.hymoFsStatus.collectAsState()
+    val installStatus by viewModel.installStatus.collectAsState()
+    val moduleMeta by viewModel.moduleMeta.collectAsState()
+    val rootImpl by viewModel.rootImpl.collectAsState()
+    val refreshTrigger by viewModel.refreshTrigger.collectAsState()
+
     LaunchedEffect(rootAccessState) {
         if (isRefreshing) isRefreshing = false
     }
@@ -83,7 +91,7 @@ fun HomeScreen(
         refreshing = isRefreshing,
         onRefresh = {
             isRefreshing = true
-            refreshKey++
+            viewModel.clearCacheAndBumpRefresh()
             onRefreshRoot()
         },
     ) {
@@ -102,38 +110,52 @@ fun HomeScreen(
                     KpReadyHintCard(onOpenSettings = onOpenSettings)
                 }
             }
-            if (systemPatchStatus !is ReidInstallStatus.Installed) {
+            if (installStatus !is ReidInstallStatus.Installed) {
                 item {
                     SystemPatchCard(
                         rootAccessState = rootAccessState,
-                        refreshTrigger = refreshKey,
+                        refreshTrigger = refreshTrigger,
                         onRefreshRoot = onRefreshRoot,
-                        onInstallStatusChanged = { systemPatchStatus = it },
+                        onInstallStatusChanged = { viewModel.setInstallStatus(it) },
+                        cachedInstallStatus = installStatus,
                     )
                 }
             }
             item {
-                MurasakiStatusCard(packageName = LocalContext.current.packageName, refreshTrigger = refreshKey)
+                MurasakiStatusCard(
+                    packageName = LocalContext.current.packageName,
+                    refreshTrigger = refreshTrigger,
+                    cachedStatus = murasakiStatus,
+                    cachedHymoFs = hymoFsStatus,
+                    onLoaded = { s, h -> viewModel.setMurasakiStatus(s); h?.let { viewModel.setHymoFsStatus(it) } },
+                )
             }
             item {
                 SystemStatusCard(
                     rootAccessState = rootAccessState,
-                    refreshTrigger = refreshKey,
-                    onRootImplementationDetected = { rootImpl = it },
+                    refreshTrigger = refreshTrigger,
+                    cached = systemStatus,
+                    onLoaded = { viewModel.setSystemStatus(it) },
+                    onRootImplementationDetected = { viewModel.setRootImpl(it) },
                 )
             }
             if (rootAccessState is RootAccessState.Granted) {
                 item {
-                    ModuleImplCard(refreshTrigger = refreshKey)
+                    ModuleImplCard(
+                        refreshTrigger = refreshTrigger,
+                        cached = moduleMeta,
+                        onLoaded = { viewModel.setModuleMeta(it) },
+                    )
                 }
             }
-            if (systemPatchStatus is ReidInstallStatus.Installed) {
+            if (installStatus is ReidInstallStatus.Installed) {
                 item {
                     SystemPatchCard(
                         rootAccessState = rootAccessState,
-                        refreshTrigger = refreshKey,
+                        refreshTrigger = refreshTrigger,
                         onRefreshRoot = onRefreshRoot,
-                        onInstallStatusChanged = { systemPatchStatus = it },
+                        onInstallStatusChanged = { viewModel.setInstallStatus(it) },
+                        cachedInstallStatus = installStatus,
                     )
                 }
             }
@@ -143,26 +165,23 @@ fun HomeScreen(
     }
 }
 
-private data class SystemStatus(
-    val kernel: String = "",
-    val selinux: String = "",
-    val device: String = "",
-    val ksu: String = "",
-    val kpReady: Boolean = false,
-    val kpVersion: String = "",
-)
-
 @Composable
 private fun SystemStatusCard(
     rootAccessState: RootAccessState,
-    refreshTrigger: Int = 0,
+    refreshTrigger: Int,
+    cached: HomeSystemStatus?,
+    onLoaded: (HomeSystemStatus) -> Unit,
     onRootImplementationDetected: (String) -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var sys by remember { mutableStateOf(SystemStatus(device = "${Build.MANUFACTURER} ${Build.MODEL}".trim())) }
+    val deviceDefault = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
 
-    fun refresh() {
+    if (cached != null) {
+        SystemStatusContent(rootAccessState = rootAccessState, sys = cached, deviceDefault = deviceDefault)
+        return
+    }
+    LaunchedEffect(ReiApplication.superKey, refreshTrigger) {
         scope.launch {
             val kernel = withContext(Dispatchers.IO) {
                 runCatching {
@@ -171,7 +190,6 @@ private fun SystemStatusCard(
                 }.getOrNull().orEmpty()
             }
             val selinux = withContext(Dispatchers.IO) { getSELinuxStatus(ctx) }
-            // Probe KSU via ksud directly so detection does not depend on current rootImplementation (otherwise we'd always use apd when rootImplementation was APATCH and never get ksu).
             val ksu = withContext(Dispatchers.IO) {
                 if (rootAccessState is RootAccessState.Granted) {
                     val r = RootShell.exec("([ -x /data/adb/ksud ] && /data/adb/ksud debug ksu-info 2>/dev/null) || true", timeoutMs = 3_000L)
@@ -187,12 +205,8 @@ private fun SystemStatusCard(
                                 if (flagsHex.isNotBlank()) append(" · ").append(flagsHex)
                             }
                         }.getOrElse { r.output.trim().take(80) }
-                    } else {
-                        ""
-                    }
-                } else {
-                    ""
-                }
+                    } else ""
+                } else ""
             }
             val key = ReiApplication.superKey
             val (kpReady, kpVersion) = withContext(Dispatchers.Default) {
@@ -201,23 +215,28 @@ private fun SystemStatusCard(
                     val ver = if (ready) ApNatives.kernelPatchVersion(key) else 0L
                     val verStr = if (ver > 0L) formatKpVersion(ver) else ""
                     ready to verStr
-                } else {
-                    false to ""
-                }
+                } else false to ""
             }
-            sys = sys.copy(kernel = kernel, selinux = selinux, ksu = ksu, kpReady = kpReady, kpVersion = kpVersion)
-            val hasKsuFd = withContext(Dispatchers.Default) { KsuNatives.isManager }
             when {
-                hasKsuFd -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
+                withContext(Dispatchers.Default) { KsuNatives.isManager } -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
                 ksu.isNotBlank() -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_KSU
                 kpReady -> ReiApplication.rootImplementation = ReiApplication.VALUE_ROOT_IMPL_APATCH
             }
             onRootImplementationDetected(ReiApplication.rootImplementation)
+            onLoaded(
+                HomeSystemStatus(device = deviceDefault, kernel = kernel, selinux = selinux, ksu = ksu, kpReady = kpReady, kpVersion = kpVersion)
+            )
         }
     }
+    SystemStatusContent(rootAccessState = rootAccessState, sys = HomeSystemStatus(device = deviceDefault), deviceDefault = deviceDefault)
+}
 
-    LaunchedEffect(ReiApplication.superKey, refreshTrigger) { refresh() }
-
+@Composable
+private fun SystemStatusContent(
+    rootAccessState: RootAccessState,
+    sys: HomeSystemStatus,
+    deviceDefault: String,
+) {
     val (rootChip, rootIcon) = when (rootAccessState) {
         RootAccessState.Requesting -> stringResource(R.string.home_root_requesting) to Icons.Outlined.Info
         RootAccessState.Ignored -> stringResource(R.string.home_root_ignored) to Icons.Outlined.Info
@@ -322,37 +341,57 @@ private fun parseModuleListForHome(raw: String): Pair<String?, String?> {
 }
 
 @Composable
-private fun ModuleImplCard(refreshTrigger: Int) {
+private fun ModuleImplCard(
+    refreshTrigger: Int,
+    cached: Pair<String?, String?>?,
+    onLoaded: (Pair<String?, String?>) -> Unit,
+) {
     val ctx = LocalContext.current
-    var metamoduleName by remember { mutableStateOf<String?>(null) }
-    var zygiskName by remember { mutableStateOf<String?>(null) }
+    val none = stringResource(R.string.home_module_impl_none)
+    if (cached != null) {
+        ReiCard {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.home_metamodule_implement)) },
+                    supportingContent = { Text(cached.first ?: none) },
+                    leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.home_zygisk_implement)) },
+                    supportingContent = { Text(cached.second ?: none) },
+                    leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+        }
+        return
+    }
     var loaded by remember { mutableStateOf(false) }
     LaunchedEffect(refreshTrigger) {
         loaded = false
-        metamoduleName = null
-        zygiskName = null
         val r = withContext(Dispatchers.IO) {
             ReidClient.exec(ctx, listOf("module", "list"), timeoutMs = 5_000L)
         }
         if (r.exitCode == 0 && r.output.isNotBlank()) {
-            val (meta, zy) = parseModuleListForHome(r.output)
-            metamoduleName = meta
-            zygiskName = zy
+            val pair = parseModuleListForHome(r.output)
+            onLoaded(pair)
+        } else {
+            onLoaded(null to null)
         }
         loaded = true
     }
-    val none = stringResource(R.string.home_module_impl_none)
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.home_metamodule_implement)) },
-                supportingContent = { Text(if (loaded) (metamoduleName ?: none) else "…") },
+                supportingContent = { Text(if (loaded) none else "…") },
                 leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.home_zygisk_implement)) },
-                supportingContent = { Text(if (loaded) (zygiskName ?: none) else "…") },
+                supportingContent = { Text(if (loaded) none else "…") },
                 leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -366,10 +405,10 @@ private fun SystemPatchCard(
     refreshTrigger: Int,
     onRefreshRoot: () -> Unit,
     onInstallStatusChanged: (ReidInstallStatus) -> Unit = {},
+    cachedInstallStatus: ReidInstallStatus = ReidInstallStatus.Unknown,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var installStatus by remember { mutableStateOf<ReidInstallStatus>(ReidInstallStatus.Unknown) }
     var isInstalling by remember { mutableStateOf(false) }
     var isUninstalling by remember { mutableStateOf(false) }
     var installError by remember { mutableStateOf<String?>(null) }
@@ -377,29 +416,26 @@ private fun SystemPatchCard(
 
     fun refreshStatus() {
         scope.launch {
-            installStatus = ReidLauncher.getInstallStatus(ctx)
+            val s = ReidLauncher.getInstallStatus(ctx)
             installError = null
             uninstallError = null
-            onInstallStatusChanged(installStatus)
+            onInstallStatusChanged(s)
         }
     }
 
-    LaunchedEffect(Unit, refreshTrigger) {
-        if (rootAccessState is RootAccessState.Granted) {
-            installStatus = ReidLauncher.getInstallStatus(ctx)
-        } else {
-            installStatus = ReidInstallStatus.Unknown
-        }
+    // 开屏即检测；获得 root 后自动再检测一次，无需手动刷新
+    LaunchedEffect(rootAccessState, refreshTrigger) {
+        val s = if (rootAccessState is RootAccessState.Granted) ReidLauncher.getInstallStatus(ctx) else ReidInstallStatus.Unknown
         installError = null
         uninstallError = null
-        onInstallStatusChanged(installStatus)
+        onInstallStatusChanged(s)
     }
 
-    val statusText = when (installStatus) {
+    val statusText = when (cachedInstallStatus) {
         is ReidInstallStatus.Unknown -> stringResource(R.string.home_system_patch_status_unknown)
         is ReidInstallStatus.NotInstalled -> stringResource(R.string.home_system_patch_not_installed)
         is ReidInstallStatus.Installed -> {
-            val ver = (installStatus as ReidInstallStatus.Installed).versionLine
+            val ver = (cachedInstallStatus as ReidInstallStatus.Installed).versionLine
             if (!ver.isNullOrBlank()) stringResource(R.string.home_system_patch_installed_version, ver)
             else stringResource(R.string.home_system_patch_installed)
         }
@@ -438,7 +474,7 @@ private fun SystemPatchCard(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    val isInstalled = installStatus is ReidInstallStatus.Installed
+                    val isInstalled = cachedInstallStatus is ReidInstallStatus.Installed
                     val busy = isInstalling || isUninstalling
                     OutlinedButton(
                         onClick = {

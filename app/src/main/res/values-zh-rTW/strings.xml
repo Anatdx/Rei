@@ -36,7 +36,21 @@
     <string name="home_redetect_root">重新检测 Root</string>
     <string name="home_redetect_root_desc">重新拉起授權并刷新状态</string>
     <string name="home_partition_manager">分区管理</string>
-    <string name="home_partition_manager_desc">查看、備份、刷寫分区，管理 A/B 槽位</string>
+    <string name="home_partition_manager_desc">查看、備份、刷寫分區，管理 A/B 槽位</string>
+    <string name="home_system_patch_title">系統修補 (reid)</string>
+    <string name="home_system_patch_not_installed">未安裝</string>
+    <string name="home_system_patch_installed">已安裝</string>
+    <string name="home_system_patch_installed_version">已安裝 · %1$s</string>
+    <string name="home_system_patch_install_btn">安裝系統修補</string>
+    <string name="home_system_patch_install_installing">安裝中…</string>
+    <string name="home_system_patch_install_failed">安裝失敗：%1$s</string>
+    <string name="home_system_patch_uninstall_btn">卸載系統修補</string>
+    <string name="home_system_patch_uninstall_uninstalling">卸載中…</string>
+    <string name="home_system_patch_uninstall_failed">卸載失敗：%1$s</string>
+    <string name="home_system_patch_status_unknown">未知（需 root 檢測）</string>
+    <string name="home_metamodule_implement">元模組實現</string>
+    <string name="home_zygisk_implement">Zygisk 實現</string>
+    <string name="home_module_impl_none">—</string>
 
     <string name="logs_filter_all">全部</string>
     <string name="logs_filter_info">信息</string>
@@ -68,8 +82,7 @@
     <string name="settings_overlay">遮罩</string>
     <string name="settings_ui_opacity">界面透明度</string>
     <string name="settings_ui_opacity_desc">卡片主体 / 页首页脚 / 边缘高光（聯動）</string>
-    <string name="settings_root_impl">Root 实现</string>
-    <string name="settings_root_impl_desc">KernelSU 與 KernelPatch/APatch 二選一：僅创建 ksud 或僅创建 apd 硬链接。</string>
+    <string name="settings_root_impl">Root 實現</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">已設定（用于 AP/KernelPatch 鑑權）</string>
     <string name="settings_superkey_hint_short">如果您已安装 KP 后端，请輸入超级密钥来获得權限。8–63 位，需含字母和数字。</string>
@@ -79,6 +92,9 @@
     <string name="settings_visibility_hide">隱藏</string>
     <string name="settings_visibility_show">顯示</string>
     <string name="settings_save">保存</string>
+    <string name="settings_superkey_saved">超級密鑰已保存</string>
+    <string name="settings_superkey_save_failed">保存失敗（請檢查設備安全設定或重試）</string>
+    <string name="settings_superkey_auth_failed">KP 鑑權失敗（密鑰錯誤或未安裝 KP 後端）</string>
     <string name="settings_manage">管理</string>
     <string name="settings_manage_desc">日志 / Boot 工具 / KP 修补</string>
     <string name="settings_logs_desc">應用日志與命令輸出</string>
@@ -191,9 +207,18 @@
     <string name="modules_undo_uninstall">取消卸載</string>
     <string name="modules_uninstall">卸載</string>
     <string name="modules_has_update">有更新</string>
+    <string name="modules_install_confirm_title">安裝模組</string>
+    <string name="modules_install_confirm_message">是否安裝「%1$s」？\n\n將執行模組的標準安裝腳本 (customize.sh)。</string>
+    <string name="modules_install_install_btn">安裝</string>
+    <string name="modules_install_running">安裝中…</string>
+    <string name="modules_install_success">安裝成功</string>
+    <string name="modules_install_failed">安裝失敗 (exit=%d)</string>
+    <string name="modules_install_output">安裝輸出</string>
+    <string name="modules_install_close">關閉</string>
 
     <!-- App Access (extra) -->
     <string name="app_access_list_title">應用授權列表</string>
+    <string name="app_access_murasaki_hint">Root 與 Murasaki/Shizuku 共用此列表。</string>
     <string name="app_access_loading">正在讀取應用列表…</string>
     <string name="app_access_visible_stats">可見 %1$d/%2$d（已授權 %3$d；允許=%4$d；排除=%5$d）</string>
     <string name="app_access_excluded_label">已排除（模組修改）</string>

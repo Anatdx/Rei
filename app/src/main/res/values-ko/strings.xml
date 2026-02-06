@@ -38,6 +38,20 @@
     <string name="home_redetect_root_desc">액세스 재요청 및 상태 새로고침</string>
     <string name="home_partition_manager">파티션 관리</string>
     <string name="home_partition_manager_desc">파티션 보기, 백업, 플래시; A/B 슬롯 관리</string>
+    <string name="home_system_patch_title">시스템 패치 (reid)</string>
+    <string name="home_system_patch_not_installed">미설치</string>
+    <string name="home_system_patch_installed">설치됨</string>
+    <string name="home_system_patch_installed_version">설치됨 · %1$s</string>
+    <string name="home_system_patch_install_btn">시스템 패치 설치</string>
+    <string name="home_system_patch_install_installing">설치 중…</string>
+    <string name="home_system_patch_install_failed">설치 실패: %1$s</string>
+    <string name="home_system_patch_uninstall_btn">시스템 패치 제거</string>
+    <string name="home_system_patch_uninstall_uninstalling">제거 중…</string>
+    <string name="home_system_patch_uninstall_failed">제거 실패: %1$s</string>
+    <string name="home_system_patch_status_unknown">알 수 없음 (Root 감지 필요)</string>
+    <string name="home_metamodule_implement">메타모듈 구현</string>
+    <string name="home_zygisk_implement">Zygisk 구현</string>
+    <string name="home_module_impl_none">—</string>
 
     <!-- Logs -->
     <string name="logs_filter_all">전체</string>
@@ -57,7 +71,7 @@
     <string name="settings_theme_light">라이트</string>
     <string name="settings_theme_dark">다크</string>
     <string name="settings_dynamic_color">Dynamic color (Android 12+)</string>
-    <string name="settings_dynamic_color_desc">Follow system wallpaper when on (accent preset disabled)</string>
+    <string name="settings_dynamic_color_desc">켜면 시스템 배경화면 색상 따름</string>
     <string name="settings_preset_ice_blue">Ice Blue</string>
     <string name="settings_preset_emerald">Emerald</string>
     <string name="settings_preset_sunset">Sunset</string>
@@ -71,8 +85,7 @@
     <string name="settings_overlay">Overlay</string>
     <string name="settings_ui_opacity">UI opacity</string>
     <string name="settings_ui_opacity_desc">Card / Footer / Edge (linked)</string>
-    <string name="settings_root_impl">Root implementation</string>
-    <string name="settings_root_impl_desc">KernelSU or KernelPatch/APatch: create ksud or apd link only.</string>
+    <string name="settings_root_impl">Root 구현</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">Set (for AP/KernelPatch auth)</string>
     <string name="settings_superkey_hint_short">Enter super key if KP backend installed. 8–63 chars, letters and digits.</string>
@@ -81,8 +94,11 @@
     <string name="settings_superkey_validation">8–63 chars, letters and digits</string>
     <string name="settings_visibility_hide">Hide</string>
     <string name="settings_visibility_show">Show</string>
-    <string name="settings_save">Save</string>
-    <string name="settings_manage">Manage</string>
+    <string name="settings_save">저장</string>
+    <string name="settings_superkey_saved">슈퍼 키 저장됨</string>
+    <string name="settings_superkey_save_failed">저장 실패 (기기 보안 설정 확인 또는 재시도)</string>
+    <string name="settings_superkey_auth_failed">KP 인증 실패 (키 오류 또는 KP 백엔드 미설치)</string>
+    <string name="settings_manage">관리</string>
     <string name="settings_manage_desc">Logs / Boot tools / KP patch</string>
     <string name="settings_logs_desc">App logs and command output</string>
     <string name="settings_partition_manager_desc">View, backup, flash partitions; manage A/B slots</string>
@@ -195,11 +211,20 @@
     <string name="modules_pending_install">Pending install</string>
     <string name="modules_undo_uninstall">Undo uninstall</string>
     <string name="modules_uninstall">Uninstall</string>
-    <string name="modules_has_update">Update available</string>
+    <string name="modules_has_update">업데이트 있음</string>
+    <string name="modules_install_confirm_title">모듈 설치</string>
+    <string name="modules_install_confirm_message">「%1$s」을(를) 설치할까요?\n\n모듈의 기본 설치 스크립트(customize.sh)를 실행합니다.</string>
+    <string name="modules_install_install_btn">설치</string>
+    <string name="modules_install_running">설치 중…</string>
+    <string name="modules_install_success">설치 완료</string>
+    <string name="modules_install_failed">설치 실패 (exit=%d)</string>
+    <string name="modules_install_output">설치 출력</string>
+    <string name="modules_install_close">닫기</string>
 
     <!-- App Access (extra) -->
-    <string name="app_access_list_title">App access list</string>
-    <string name="app_access_loading">Loading app list…</string>
+    <string name="app_access_list_title">앱 접근 목록</string>
+    <string name="app_access_murasaki_hint">Root와 Murasaki/Shizuku가 이 목록을 공유합니다.</string>
+    <string name="app_access_loading">앱 목록 로딩 중…</string>
     <string name="app_access_visible_stats">Visible %1$d/%2$d (granted %3$d; allow=%4$d; exclude=%5$d)</string>
     <string name="app_access_excluded_label">Excluded (module changes)</string>
     <string name="app_access_exclude_mod_switch">Exclude module changes</string>

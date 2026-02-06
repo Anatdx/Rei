@@ -248,6 +248,41 @@ public:
             return service.nukeExt4Sysfs();
         }
 
+        case Command::GET_APP_PROFILE: {
+            int32_t uid = 0;
+            std::string key;
+            if (req_data.size() >= sizeof(AppProfileRequest)) {
+                auto* req = reinterpret_cast<const AppProfileRequest*>(req_data.data());
+                uid = req->uid;
+                key.assign(req->profile_json, strnlen(req->profile_json, sizeof(req->profile_json)));
+            } else if (req_data.size() >= sizeof(UidRequest)) {
+                auto* req = reinterpret_cast<const UidRequest*>(req_data.data());
+                uid = req->uid;
+            }
+            std::string json = service.getAppProfile(uid, key);
+            resp_data.resize(json.size() + 1);
+            memcpy(resp_data.data(), json.c_str(), json.size() + 1);
+            return 0;
+        }
+
+        case Command::SET_APP_PROFILE: {
+            if (req_data.size() < sizeof(AppProfileRequest)) {
+                return -EINVAL;
+            }
+            auto* req = reinterpret_cast<const AppProfileRequest*>(req_data.data());
+            std::string json(req->profile_json, strnlen(req->profile_json, sizeof(req->profile_json)));
+            return service.setAppProfile(req->uid, json);
+        }
+
+        case Command::ADD_TRY_UMOUNT: {
+            if (req_data.size() < sizeof(HymoSetPathRequest)) {
+                return -EINVAL;
+            }
+            auto* req = reinterpret_cast<const HymoSetPathRequest*>(req_data.data());
+            std::string path(req->path, strnlen(req->path, sizeof(req->path)));
+            return service.addTryUmount(path);
+        }
+
         default:
             LOGW("Unknown command: %u", static_cast<uint32_t>(cmd));
             return -ENOSYS;

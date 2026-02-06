@@ -37,6 +37,20 @@
     <string name="home_redetect_root_desc">Повторно запросить доступ и обновить состояние</string>
     <string name="home_partition_manager">Управление разделами</string>
     <string name="home_partition_manager_desc">Просмотр, резервная копия, прошивка разделов; слоты A/B</string>
+    <string name="home_system_patch_title">Системный патч (reid)</string>
+    <string name="home_system_patch_not_installed">Не установлен</string>
+    <string name="home_system_patch_installed">Установлен</string>
+    <string name="home_system_patch_installed_version">Установлен · %1$s</string>
+    <string name="home_system_patch_install_btn">Установить системный патч</string>
+    <string name="home_system_patch_install_installing">Установка…</string>
+    <string name="home_system_patch_install_failed">Ошибка установки: %1$s</string>
+    <string name="home_system_patch_uninstall_btn">Удалить системный патч</string>
+    <string name="home_system_patch_uninstall_uninstalling">Удаление…</string>
+    <string name="home_system_patch_uninstall_failed">Ошибка удаления: %1$s</string>
+    <string name="home_system_patch_status_unknown">Неизвестно (требуется root)</string>
+    <string name="home_metamodule_implement">Реализация метамодуля</string>
+    <string name="home_zygisk_implement">Реализация Zygisk</string>
+    <string name="home_module_impl_none">—</string>
 
     <string name="logs_filter_all">Все</string>
     <string name="logs_filter_info">Инфо</string>
@@ -69,7 +83,6 @@
     <string name="settings_ui_opacity">Прозрачность интерфейса</string>
     <string name="settings_ui_opacity_desc">Карточка / Подвал / Край (связаны)</string>
     <string name="settings_root_impl">Реализация Root</string>
-    <string name="settings_root_impl_desc">KernelSU или KernelPatch/APatch: создавать только ссылку ksud или apd.</string>
     <string name="settings_apatch_superkey">Супер-ключ APatch</string>
     <string name="settings_superkey_set">Задан (аутентификация AP/KernelPatch)</string>
     <string name="settings_superkey_hint_short">Супер-ключ для бэкенда KP. 8–63 символа, буквы и цифры.</string>
@@ -79,6 +92,9 @@
     <string name="settings_visibility_hide">Скрыть</string>
     <string name="settings_visibility_show">Показать</string>
     <string name="settings_save">Сохранить</string>
+    <string name="settings_superkey_saved">Супер-ключ сохранён</string>
+    <string name="settings_superkey_save_failed">Ошибка сохранения (проверьте настройки безопасности или повторите)</string>
+    <string name="settings_superkey_auth_failed">Ошибка аутентификации KP (неверный ключ или KP не установлен)</string>
     <string name="settings_manage">Управление</string>
     <string name="settings_manage_desc">Журнал / Инструменты Boot / Патч KP</string>
     <string name="settings_logs_desc">Журнал приложения и вывод команд</string>
@@ -191,9 +207,18 @@
     <string name="modules_undo_uninstall">Отменить удаление</string>
     <string name="modules_uninstall">Удалить</string>
     <string name="modules_has_update">Доступно обновление</string>
+    <string name="modules_install_confirm_title">Установить модуль</string>
+    <string name="modules_install_confirm_message">Установить «%1$s»?\n\nБудет выполнен стандартный скрипт установки (customize.sh).</string>
+    <string name="modules_install_install_btn">Установить</string>
+    <string name="modules_install_running">Установка…</string>
+    <string name="modules_install_success">Установка выполнена</string>
+    <string name="modules_install_failed">Ошибка (exit=%d)</string>
+    <string name="modules_install_output">Вывод установки</string>
+    <string name="modules_install_close">Закрыть</string>
 
     <!-- App Access (extra) -->
     <string name="app_access_list_title">Список доступа приложений</string>
+    <string name="app_access_murasaki_hint">Root и Murasaki/Shizuku используют общий список.</string>
     <string name="app_access_loading">Загрузка списка приложений…</string>
     <string name="app_access_visible_stats">Видно %1$d/%2$d (разрешено %3$d; allow=%4$d; exclude=%5$d)</string>
     <string name="app_access_excluded_label">Исключено (изменения модуля)</string>

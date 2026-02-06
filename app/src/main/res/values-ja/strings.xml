@@ -37,6 +37,20 @@
     <string name="home_redetect_root_desc">権限を再要求して状態を更新</string>
     <string name="home_partition_manager">パーティション管理</string>
     <string name="home_partition_manager_desc">パーティションの表示・バックアップ・フラッシュ、A/B スロット管理</string>
+    <string name="home_system_patch_title">システムパッチ (reid)</string>
+    <string name="home_system_patch_not_installed">未インストール</string>
+    <string name="home_system_patch_installed">インストール済み</string>
+    <string name="home_system_patch_installed_version">インストール済み · %1$s</string>
+    <string name="home_system_patch_install_btn">システムパッチをインストール</string>
+    <string name="home_system_patch_install_installing">インストール中…</string>
+    <string name="home_system_patch_install_failed">インストール失敗：%1$s</string>
+    <string name="home_system_patch_uninstall_btn">システムパッチをアンインストール</string>
+    <string name="home_system_patch_uninstall_uninstalling">アンインストール中…</string>
+    <string name="home_system_patch_uninstall_failed">アンインストール失敗：%1$s</string>
+    <string name="home_system_patch_status_unknown">不明（Root で検出が必要）</string>
+    <string name="home_metamodule_implement">メタモジュール実装</string>
+    <string name="home_zygisk_implement">Zygisk 実装</string>
+    <string name="home_module_impl_none">—</string>
 
     <string name="logs_filter_all">すべて</string>
     <string name="logs_filter_info">情報</string>
@@ -69,7 +83,6 @@
     <string name="settings_ui_opacity">UI 不透明度</string>
     <string name="settings_ui_opacity_desc">カード / フッター / エッジ（連動）</string>
     <string name="settings_root_impl">Root 実装</string>
-    <string name="settings_root_impl_desc">KernelSU または KernelPatch/APatch のいずれか：ksud または apd リンクのみ作成。</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">設定済み（AP/KernelPatch 認証用）</string>
     <string name="settings_superkey_hint_short">KP バックエンド用。8～63 文字の英数字を入力してください。</string>
@@ -79,6 +92,9 @@
     <string name="settings_visibility_hide">非表示</string>
     <string name="settings_visibility_show">表示</string>
     <string name="settings_save">保存</string>
+    <string name="settings_superkey_saved">スーパーキーを保存しました</string>
+    <string name="settings_superkey_save_failed">保存失敗（端末のセキュリティ設定を確認するか再試行してください）</string>
+    <string name="settings_superkey_auth_failed">KP 認証失敗（キーが誤っているか KP バックエンドが未インストールです）</string>
     <string name="settings_manage">管理</string>
     <string name="settings_manage_desc">ログ / Boot ツール / KP パッチ</string>
     <string name="settings_logs_desc">アプリログとコマンド出力</string>
@@ -162,7 +178,24 @@
 
     <!-- Patches (KP) -->
     <string name="patches_kp_title">KernelPatch パッチ</string>
-    <string name="patches_kp_desc">kpimg と kptools はビルド時に同梱。完全な boot パッチ（magiskboot 等）は IcePatch を推奨。ここでは同梱 kpimg 情報を表示。</string>
+    <string name="patches_kp_desc">KernelPatch でストック boot.img をパッチ。Root 時は直接フラッシュ可能。</string>
+    <string name="patches_select_mode">パッチモード</string>
+    <string name="patches_install_inactive">非アクティブスロットにインストール (OTA)</string>
+    <string name="patches_select_boot">boot.img を選択</string>
+    <string name="patches_boot_image">ブートイメージ</string>
+    <string name="patches_select_file">ファイルを選択</string>
+    <string name="patches_direct_install">直接インストール（フラッシュ）</string>
+    <string name="patches_patch_btn">パッチ</string>
+    <string name="patches_patch_flash_btn">パッチしてフラッシュ</string>
+    <string name="patches_save">保存</string>
+    <string name="patches_logs">ログ</string>
+    <string name="patches_starting">パッチ開始…</string>
+    <string name="patches_success">パッチ成功！</string>
+    <string name="patches_saved">%s に保存しました</string>
+    <string name="patches_flash_complete">フラッシュ完了！再起動で反映されます。</string>
+    <string name="patches_error_save">保存失敗：%s</string>
+    <string name="patches_error_exec">実行失敗：%s</string>
+    <string name="patches_error_script">パッチスクリプト失敗 (exit code %d)</string>
     <string name="patches_view_kpimg">kpimg 情報を表示</string>
     <string name="patches_run_kptools">kptools -l -k kpimg を実行</string>
     <string name="patches_kpimg_info">kpimg 情報</string>
@@ -191,9 +224,18 @@
     <string name="modules_undo_uninstall">アンインストール取り消し</string>
     <string name="modules_uninstall">アンインストール</string>
     <string name="modules_has_update">更新あり</string>
+    <string name="modules_install_confirm_title">モジュールをインストール</string>
+    <string name="modules_install_confirm_message">「%1$s」をインストールしますか？\n\nモジュールの標準インストールスクリプト (customize.sh) を実行します。</string>
+    <string name="modules_install_install_btn">インストール</string>
+    <string name="modules_install_running">インストール中…</string>
+    <string name="modules_install_success">インストール成功</string>
+    <string name="modules_install_failed">インストール失敗 (exit=%d)</string>
+    <string name="modules_install_output">インストール出力</string>
+    <string name="modules_install_close">閉じる</string>
 
     <!-- App Access (extra) -->
     <string name="app_access_list_title">アプリ許可一覧</string>
+    <string name="app_access_murasaki_hint">Root と Murasaki/Shizuku はこの一覧を共有します。</string>
     <string name="app_access_loading">アプリ一覧を読み込み中…</string>
     <string name="app_access_visible_stats">表示 %1$d/%2$d（許可済み %3$d、allow=%4$d、exclude=%5$d）</string>
     <string name="app_access_excluded_label">除外済み（モジュール変更）</string>
@@ -262,6 +304,6 @@
     <string name="murasaki_retry">再試行</string>
     <string name="murasaki_level_shell">SHELL (Shizuku 互換)</string>
     <string name="murasaki_level_root">ROOT (Sui 互換)</string>
-    <string name="murasaki_level_kernel">KERNEL (Murasaki 専用)</string>
+    <string name="murasaki_level_kernel">KERNEL</string>
     <string name="murasaki_level_unknown">Unknown (%d)</string>
 </resources>

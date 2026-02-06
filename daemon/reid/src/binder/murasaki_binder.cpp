@@ -12,6 +12,7 @@
 #include "../ksud/sepolicy/sepolicy.hpp"
 #include "../utils.hpp"
 #include "binder_wrapper.hpp"
+#include "murasaki_service.hpp"
 #include "shizuku_service.hpp"
 
 #include <android/binder_parcel.h>
@@ -383,6 +384,78 @@ binder_status_t MurasakiBinderService::onTransact(AIBinder* binder, transaction_
         for (int32_t u : uids) {
             BW.AParcel_writeInt32(out, u);
         }
+        return STATUS_OK;
+    }
+    case 15: {  // getDenyUids() - UIDs in denylist (umount / exclude)
+        std::vector<uint32_t> uids = get_allow_list(false);
+        WRITE_NO_EXCEPTION();
+        BW.AParcel_writeInt32(out, static_cast<int32_t>(uids.size()));
+        for (uint32_t u : uids) {
+            BW.AParcel_writeInt32(out, static_cast<int32_t>(u));
+        }
+        return STATUS_OK;
+    }
+    case 16: {  // setAppProfile(int uid, String profileJson)
+        int32_t uid = 0;
+        BW.AParcel_readInt32(in, &uid);
+        std::string profileJson;
+        BW.readString(in, profileJson);
+        int ret = ksud::murasaki::MurasakiService::getInstance().setAppProfile(uid, profileJson);
+        if (ret != 0) {
+            WRITE_NO_EXCEPTION();
+            BW.AParcel_writeBool(out, false);
+            return STATUS_OK;
+        }
+        // Sync allowlist file so allowlist_uids() / grantRoot stay consistent
+        auto parse_str = [](const std::string& json, const char* key) {
+            std::string pattern = std::string("\"") + key + "\":\"";
+            size_t pos = json.find(pattern);
+            if (pos == std::string::npos) {
+                pattern = std::string("\"") + key + "\": \"";
+                pos = json.find(pattern);
+                if (pos == std::string::npos)
+                    return std::string("");
+                pos += pattern.size();
+            } else {
+                pos += pattern.size();
+            }
+            size_t end = pos;
+            while (end < json.size() && json[end] != '"') {
+                if (json[end] == '\\' && end + 1 < json.size())
+                    end++;
+                end++;
+            }
+            return json.substr(pos, end - pos);
+        };
+        auto parse_bool = [](const std::string& json, const char* key, bool def) {
+            std::string pattern = std::string("\"") + key + "\":";
+            size_t pos = json.find(pattern);
+            if (pos == std::string::npos)
+                return def;
+            pos += pattern.size();
+            while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+                pos++;
+            if (pos < json.size() && (json[pos] == 't' || json[pos] == 'T'))
+                return true;
+            if (pos < json.size() && (json[pos] == 'f' || json[pos] == 'F'))
+                return false;
+            return def;
+        };
+        std::string key = parse_str(profileJson, "name");
+        if (key.empty())
+            key = parse_str(profileJson, "key");
+        if (key.empty())
+            key = "?";
+        bool allow_su = parse_bool(profileJson, "allowSu", false);
+        if (allow_su) {
+            allowlist_add(uid, key);
+            allowlist_grant_to_backend(uid, key);
+        } else {
+            allowlist_remove_by_uid(uid);
+            allowlist_revoke_from_backend(uid);
+        }
+        WRITE_NO_EXCEPTION();
+        BW.AParcel_writeBool(out, true);
         return STATUS_OK;
     }
     case 20: {  // getHymoFsService()

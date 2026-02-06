@@ -46,9 +46,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,16 +72,23 @@ import org.json.JSONObject
 import androidx.compose.foundation.lazy.LazyColumn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.ViewModel
 import java.util.zip.ZipFile
 
 @Composable
 fun ModulesScreen(rootAccessState: RootAccessState) {
+    val viewModel = viewModel<ModulesViewModel>()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val cachedModules by viewModel.modules.collectAsState()
+    val cachedListError by viewModel.listError.collectAsState()
 
     var loading by rememberSaveable { mutableStateOf(false) }
-    var modules by remember { mutableStateOf<List<ModuleEntry>>(emptyList()) }
-    var listError by rememberSaveable { mutableStateOf<String?>(null) }
+    val modules = cachedModules ?: emptyList()
+    val listError = cachedListError
     var opError by rememberSaveable { mutableStateOf<String?>(null) }
 
     var installZip by rememberSaveable { mutableStateOf("") }
@@ -116,30 +125,32 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
 
     suspend fun refresh() {
         if (!canUseRoot()) {
-            listError = "no_root"
+            viewModel.setListError("no_root")
             return
         }
         loading = true
-        listError = null
+        viewModel.setListError(null)
         val r = ReidClient.exec(ctx, listOf("module", "list"), timeoutMs = 30_000L)
         if (r.exitCode != 0) {
-            listError = "exit=${r.exitCode}\n${r.output}"
-            modules = emptyList()
+            viewModel.setListError("exit=${r.exitCode}\n${r.output}")
+            viewModel.setModules(emptyList())
         } else {
             runCatching {
                 val list = parseModuleListJson(r.output)
-                modules = list.sortedWith(
-                    compareBy<ModuleEntry> { m ->
-                        when {
-                            m.enabled && m.metamodule -> 0
-                            m.enabled -> 1
-                            else -> 2
-                        }
-                    }.thenBy { it.name.lowercase() }
+                viewModel.setModules(
+                    list.sortedWith(
+                        compareBy<ModuleEntry> { m ->
+                            when {
+                                m.enabled && m.metamodule -> 0
+                                m.enabled -> 1
+                                else -> 2
+                            }
+                        }.thenBy { it.name.lowercase() }
+                    )
                 )
             }.onFailure { t ->
-                listError = t.javaClass.simpleName
-                modules = emptyList()
+                viewModel.setListError(t.javaClass.simpleName)
+                viewModel.setModules(emptyList())
             }
         }
         loading = false
@@ -159,8 +170,10 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
         }
     }
 
-    LaunchedEffect(canUseRoot()) {
-        if (canUseRoot()) refresh()
+    // 有缓存时直接展示；无缓存或获得 root 后自动加载
+    LaunchedEffect(canUseRoot(), cachedModules) {
+        if (cachedModules != null) loading = false
+        else if (canUseRoot()) scope.launch { refresh() }
     }
 
     PullToRefreshBox(
@@ -429,7 +442,7 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
     }
 }
 
-private data class ModuleEntry(
+internal data class ModuleEntry(
     val id: String,
     val name: String,
     val version: String,
@@ -481,6 +494,17 @@ private data class PendingInstall(
     val version: String,
     val author: String,
 )
+
+/** 模块列表缓存：切回模块页时直接展示，下拉刷新更新 */
+internal class ModulesViewModel : ViewModel() {
+    private val _modules = MutableStateFlow<List<ModuleEntry>?>(null)
+    val modules: StateFlow<List<ModuleEntry>?> = _modules.asStateFlow()
+    private val _listError = MutableStateFlow<String?>(null)
+    val listError: StateFlow<String?> = _listError.asStateFlow()
+
+    fun setModules(list: List<ModuleEntry>) { _modules.value = list }
+    fun setListError(err: String?) { _listError.value = err }
+}
 
 private fun scanModuleZip(path: String): PendingInstall? {
     return runCatching {

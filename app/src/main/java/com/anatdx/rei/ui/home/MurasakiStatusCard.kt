@@ -78,12 +78,28 @@ fun MurasakiStatusCard(
     packageName: String,
     modifier: Modifier = Modifier,
     refreshTrigger: Int = 0,
+    cachedStatus: HomeMurasakiStatus? = null,
+    cachedHymoFs: HomeHymoFsStatus? = null,
+    onLoaded: (HomeMurasakiStatus, HomeHymoFsStatus?) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf(MurasakiStatus()) }
     var hymoFsStatus by remember { mutableStateOf(HymoFsStatus()) }
     var isLoading by remember { mutableStateOf(false) }
+
+    if (cachedStatus != null) {
+        MurasakiStatusCardContent(
+            modifier = modifier,
+            status = cachedStatus,
+            hymoFsStatus = cachedHymoFs,
+            isLoading = false,
+            context = context,
+            onRetry = {},
+            onStealthToggle = null,
+        )
+        return
+    }
 
     fun connect() {
         scope.launch {
@@ -110,6 +126,7 @@ fun MurasakiStatusCard(
                     )
                 }
                 status = result
+                var hfsStatus: HomeHymoFsStatus? = null
                 if (result.isConnected) {
                     val hfs: IHymoFsService? = Murasaki.getHymoFsService()
                     if (hfs != null) {
@@ -121,27 +138,146 @@ fun MurasakiStatusCard(
                                 redirectRulesCount = hfs.redirectRules?.size ?: 0,
                             )
                         }
+                        hfsStatus = HomeHymoFsStatus(
+                            isAvailable = hymoFsStatus.isAvailable,
+                            stealthEnabled = hymoFsStatus.stealthEnabled,
+                            hideRulesCount = hymoFsStatus.hideRulesCount,
+                            redirectRulesCount = hymoFsStatus.redirectRulesCount,
+                        )
                     }
                 }
+                onLoaded(
+                    HomeMurasakiStatus(
+                        isConnected = result.isConnected,
+                        serviceVersion = result.serviceVersion,
+                        ksuVersion = result.ksuVersion,
+                        privilegeLevel = result.privilegeLevel,
+                        privilegeLevelName = result.privilegeLevelName,
+                        isKernelModeAvailable = result.isKernelModeAvailable,
+                        selinuxContext = result.selinuxContext,
+                        error = result.error,
+                    ),
+                    hfsStatus,
+                )
             } catch (e: Exception) {
                 status = MurasakiStatus(isConnected = false, error = e.message ?: context.getString(R.string.murasaki_error_unknown))
+                onLoaded(
+                    HomeMurasakiStatus(isConnected = false, error = e.message ?: context.getString(R.string.murasaki_error_unknown)),
+                    null,
+                )
             } finally {
                 isLoading = false
             }
         }
     }
 
-    /** 先尝试拉起 Murasaki daemon（reid/ksud/apd services），再连接 Binder。解决开机未执行 services 导致服务未启动的问题。 */
+    /** 先尝试连接 Binder；若未连接再通过 shell 拉起 daemon（services），然后连接。已连 Murasaki 时不再 exec。 */
     fun ensureDaemonThenConnect() {
         scope.launch {
             withContext(Dispatchers.IO) {
-                ReidClient.exec(context, listOf("services"), timeoutMs = 5000L)
+                val alreadyConnected = runCatching {
+                    Murasaki.init(packageName)
+                    Murasaki.getMurasakiService() != null
+                }.getOrDefault(false)
+                if (!alreadyConnected) {
+                    ReidClient.exec(context, listOf("services"), timeoutMs = 5000L)
+                }
             }
             connect()
         }
     }
 
     LaunchedEffect(packageName, refreshTrigger) { ensureDaemonThenConnect() }
+
+    MurasakiStatusCardContent(
+        modifier = modifier,
+        status = status,
+        hymoFsStatus = hymoFsStatus,
+        isLoading = isLoading,
+        context = context,
+        onRetry = { ensureDaemonThenConnect() },
+        onStealthToggle = {
+            scope.launch {
+                val hfs = withContext(Dispatchers.IO) { Murasaki.getHymoFsService() }
+                if (hfs != null) {
+                    withContext(Dispatchers.IO) { hfs.setStealthMode(!hymoFsStatus.stealthEnabled) }
+                    hymoFsStatus = hymoFsStatus.copy(stealthEnabled = !hymoFsStatus.stealthEnabled)
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun MurasakiStatusCardContent(
+    modifier: Modifier,
+    status: Any,
+    hymoFsStatus: Any?,
+    isLoading: Boolean,
+    context: android.content.Context,
+    onRetry: () -> Unit = {},
+    onStealthToggle: (() -> Unit)? = null,
+) {
+    val isConnected = when (status) {
+        is HomeMurasakiStatus -> status.isConnected
+        is MurasakiStatus -> status.isConnected
+        else -> false
+    }
+    val serviceVersion = when (status) {
+        is HomeMurasakiStatus -> status.serviceVersion
+        is MurasakiStatus -> status.serviceVersion
+        else -> -1
+    }
+    val ksuVersion = when (status) {
+        is HomeMurasakiStatus -> status.ksuVersion
+        is MurasakiStatus -> status.ksuVersion
+        else -> -1
+    }
+    val privilegeLevel = when (status) {
+        is HomeMurasakiStatus -> status.privilegeLevel
+        is MurasakiStatus -> status.privilegeLevel
+        else -> -1
+    }
+    val privilegeLevelName = when (status) {
+        is HomeMurasakiStatus -> status.privilegeLevelName
+        is MurasakiStatus -> status.privilegeLevelName
+        else -> "Unknown"
+    }
+    val isKernelModeAvailable = when (status) {
+        is HomeMurasakiStatus -> status.isKernelModeAvailable
+        is MurasakiStatus -> status.isKernelModeAvailable
+        else -> false
+    }
+    val selinuxContext = when (status) {
+        is HomeMurasakiStatus -> status.selinuxContext
+        is MurasakiStatus -> status.selinuxContext
+        else -> null
+    }
+    val error = when (status) {
+        is HomeMurasakiStatus -> status.error
+        is MurasakiStatus -> status.error
+        else -> null
+    }
+    val hfsAvailable = when (hymoFsStatus) {
+        is HomeHymoFsStatus -> hymoFsStatus.isAvailable
+        is HymoFsStatus -> hymoFsStatus.isAvailable
+        else -> false
+    }
+    val hfsStealth = when (hymoFsStatus) {
+        is HomeHymoFsStatus -> hymoFsStatus.stealthEnabled
+        is HymoFsStatus -> hymoFsStatus.stealthEnabled
+        else -> false
+    }
+    val hfsHideCount = when (hymoFsStatus) {
+        is HomeHymoFsStatus -> hymoFsStatus.hideRulesCount
+        is HymoFsStatus -> hymoFsStatus.hideRulesCount
+        else -> 0
+    }
+    val hfsRedirectCount = when (hymoFsStatus) {
+        is HomeHymoFsStatus -> hymoFsStatus.redirectRulesCount
+        is HymoFsStatus -> hymoFsStatus.redirectRulesCount
+        else -> 0
+    }
 
     ReiCard(modifier = modifier) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -156,7 +292,7 @@ fun MurasakiStatusCard(
                                 .background(
                                     when {
                                         isLoading -> Color(0xFFFFC107)
-                                        status.isConnected -> Color(0xFF4CAF50)
+                                        isConnected -> Color(0xFF4CAF50)
                                         else -> MaterialTheme.colorScheme.error
                                     },
                                 ),
@@ -165,7 +301,7 @@ fun MurasakiStatusCard(
                         Text(
                             text = when {
                                 isLoading -> stringResource(R.string.murasaki_connecting)
-                                status.isConnected -> stringResource(R.string.murasaki_connected)
+                                isConnected -> stringResource(R.string.murasaki_connected)
                                 else -> stringResource(R.string.murasaki_disconnected)
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -187,21 +323,25 @@ fun MurasakiStatusCard(
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                status.isConnected -> {
+                isConnected -> {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                    MurasakiDetails(status, hymoFsStatus) {
-                        scope.launch {
-                            val hfs = withContext(Dispatchers.IO) { Murasaki.getHymoFsService() }
-                            if (hfs != null) {
-                                withContext(Dispatchers.IO) { hfs.setStealthMode(!hymoFsStatus.stealthEnabled) }
-                                hymoFsStatus = hymoFsStatus.copy(stealthEnabled = !hymoFsStatus.stealthEnabled)
-                            }
-                        }
-                    }
+                    MurasakiDetailsFromFields(
+                        privilegeLevel = privilegeLevel,
+                        privilegeLevelName = privilegeLevelName,
+                        serviceVersion = serviceVersion,
+                        ksuVersion = ksuVersion,
+                        isKernelModeAvailable = isKernelModeAvailable,
+                        selinuxContext = selinuxContext,
+                        hfsAvailable = hfsAvailable,
+                        hfsStealth = hfsStealth,
+                        hfsHideCount = hfsHideCount,
+                        hfsRedirectCount = hfsRedirectCount,
+                        onStealthToggle = onStealthToggle,
+                    )
                 }
                 else -> {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                    ConnectionError(status.error) { ensureDaemonThenConnect() }
+                    ConnectionError(error) { onRetry() }
                 }
             }
         }
@@ -209,12 +349,20 @@ fun MurasakiStatusCard(
 }
 
 @Composable
-private fun MurasakiDetails(
-    status: MurasakiStatus,
-    hymoFsStatus: HymoFsStatus,
-    onStealthToggle: () -> Unit,
+private fun MurasakiDetailsFromFields(
+    privilegeLevel: Int,
+    privilegeLevelName: String,
+    serviceVersion: Int,
+    ksuVersion: Int,
+    isKernelModeAvailable: Boolean,
+    selinuxContext: String?,
+    hfsAvailable: Boolean,
+    hfsStealth: Boolean,
+    hfsHideCount: Int,
+    hfsRedirectCount: Int,
+    onStealthToggle: (() -> Unit)?,
 ) {
-    val (levelColor, levelIcon) = when (status.privilegeLevel) {
+    val (levelColor, levelIcon) = when (privilegeLevel) {
         Murasaki.LEVEL_SHELL -> Color(0xFF4CAF50) to Icons.Default.Terminal
         Murasaki.LEVEL_ROOT -> Color(0xFFFF9800) to Icons.Default.AdminPanelSettings
         Murasaki.LEVEL_KERNEL -> Color(0xFFF44336) to Icons.Default.Memory
@@ -243,7 +391,7 @@ private fun MurasakiDetails(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = status.privilegeLevelName,
+                        text = privilegeLevelName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = levelColor,
                     )
@@ -256,23 +404,23 @@ private fun MurasakiDetails(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(stringResource(R.string.murasaki_service_version), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (status.serviceVersion >= 0) "v${status.serviceVersion}" else "N/A", style = MaterialTheme.typography.bodySmall)
+            Text(if (serviceVersion >= 0) "v$serviceVersion" else "N/A", style = MaterialTheme.typography.bodySmall)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(stringResource(R.string.murasaki_ksu_version), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (status.ksuVersion >= 0) status.ksuVersion.toString() else "N/A", style = MaterialTheme.typography.bodySmall)
+            Text(if (ksuVersion >= 0) ksuVersion.toString() else "N/A", style = MaterialTheme.typography.bodySmall)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(stringResource(R.string.murasaki_kernel_mode), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (status.isKernelModeAvailable) stringResource(R.string.murasaki_available) else stringResource(R.string.murasaki_unavailable), style = MaterialTheme.typography.bodySmall)
+            Text(if (isKernelModeAvailable) stringResource(R.string.murasaki_available) else stringResource(R.string.murasaki_unavailable), style = MaterialTheme.typography.bodySmall)
         }
-        status.selinuxContext?.let { ctx ->
+        selinuxContext?.let { ctx ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,17 +430,17 @@ private fun MurasakiDetails(
             }
         }
 
-        if (hymoFsStatus.isAvailable) {
+        if (hfsAvailable && onStealthToggle != null) {
             HorizontalDivider(Modifier.padding(vertical = 2.dp))
             FilterChip(
-                selected = hymoFsStatus.stealthEnabled,
+                selected = hfsStealth,
                 onClick = onStealthToggle,
                 label = { Text(stringResource(R.string.murasaki_stealth)) },
                 leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, Modifier.size(18.dp)) },
             )
-            if (hymoFsStatus.hideRulesCount > 0 || hymoFsStatus.redirectRulesCount > 0) {
+            if (hfsHideCount > 0 || hfsRedirectCount > 0) {
                 Text(
-                    text = stringResource(R.string.murasaki_rules_active, hymoFsStatus.hideRulesCount, hymoFsStatus.redirectRulesCount),
+                    text = stringResource(R.string.murasaki_rules_active, hfsHideCount, hfsRedirectCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

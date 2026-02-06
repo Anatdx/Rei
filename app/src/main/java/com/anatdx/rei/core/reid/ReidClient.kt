@@ -5,6 +5,8 @@ import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.auth.ReiKeyHelper
 import com.anatdx.rei.core.log.ReiLog
 import com.anatdx.rei.core.log.ReiLogLevel
+import io.murasaki.Murasaki
+import io.murasaki.server.IMurasakiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -60,20 +62,69 @@ object ReidClient {
         }
     }
 
-    /** Run current backend (ksud/apd/reid). Path 按 rootImplementation 明确选择，保证 argv[0] basename 为 apd/ksud，不被误用 reid。 */
+    /** Run current backend (ksud/apd/reid). Prefer Murasaki Binder for profile/allowlist; else shell. */
     suspend fun exec(context: Context, args: List<String>, timeoutMs: Long = 30_000L): ReidExecResult {
         return withContext(Dispatchers.IO) {
-            val backendArgs = args.joinToString(" ") { shellEscape(it) }
-            if (ReiApplication.superKey.isEmpty()) {
-                ReiKeyHelper.readSuperKey().takeIf { it.isNotEmpty() }?.let { ReiApplication.superKey = it }
+            val murasakiResult = tryMurasakiForProfile(context, args)
+            if (murasakiResult != null) {
+                murasakiResult
+            } else {
+                val backendArgs = args.joinToString(" ") { shellEscape(it) }
+                if (ReiApplication.superKey.isEmpty()) {
+                    ReiKeyHelper.readSuperKey().takeIf { it.isNotEmpty() }?.let { ReiApplication.superKey = it }
+                }
+                val apdSuperkey = ReiApplication.superKey
+                val apdKeyArg = if (apdSuperkey.isNotEmpty()) " --superkey ${shellEscape(apdSuperkey)}" else ""
+                val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
+                val backendPath = if (useApd) "/data/adb/apd" else "/data/adb/ksud"
+                val keyArg = if (useApd) apdKeyArg else ""
+                val cmd = "if [ -x $backendPath ]; then exec $backendPath$keyArg $backendArgs; elif [ -x /data/adb/reid ]; then exec /data/adb/reid $backendArgs; else echo no_installed_backend; exit 127; fi"
+                runShellSu(cmd, context, args, timeoutMs)
             }
-            val apdSuperkey = ReiApplication.superKey
-            val apdKeyArg = if (apdSuperkey.isNotEmpty()) " --superkey ${shellEscape(apdSuperkey)}" else ""
-            val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
-            val backendPath = if (useApd) "/data/adb/apd" else "/data/adb/ksud"
-            val keyArg = if (useApd) apdKeyArg else ""
-            val cmd = "if [ -x $backendPath ]; then exec $backendPath$keyArg $backendArgs; elif [ -x /data/adb/reid ]; then exec /data/adb/reid $backendArgs; else echo no_installed_backend; exit 127; fi"
-            runShellSu(cmd, context, args, timeoutMs)
+        }
+    }
+
+    /**
+     * Try to handle profile/allowlist via Murasaki Binder (no shell).
+     * Returns result if handled, null to fallback to exec shell.
+     */
+    private fun tryMurasakiForProfile(context: Context, args: List<String>): ReidExecResult? {
+        if (args.isEmpty()) return null
+        val service: IMurasakiService? = runCatching {
+            Murasaki.init(context.packageName)
+            Murasaki.getMurasakiService()
+        }.getOrNull() ?: return null
+
+        return runCatching {
+            when {
+                args.size >= 2 && args[0] == "profile" && args[1] == "allowlist" -> {
+                    val uids = service?.getRootUids() ?: return@runCatching null
+                    ReidExecResult(0, "[${uids.joinToString(",")}]")
+                }
+                args.size >= 2 && args[0] == "profile" && args[1] == "denylist" -> {
+                    val uids = service?.getDenyUids() ?: return@runCatching null
+                    ReidExecResult(0, "[${uids.joinToString(",")}]")
+                }
+                args.size >= 5 && args[0] == "profile" && args[1] == "set-allow" -> {
+                    val uid = args[2].toIntOrNull() ?: return@runCatching null
+                    val pkg = args[3]
+                    val allowSu = args[4] == "1"
+                    val json = """{"name":"${pkg.replace("\"", "\\\"")}","currentUid":$uid,"allowSu":$allowSu,"umountModules":${!allowSu}}"""
+                    val ok = service?.setAppProfile(uid, json) == true
+                    if (ok) ReidExecResult(0, "") else ReidExecResult(1, "setAppProfile failed")
+                }
+                args.size >= 4 && args[0] == "allowlist" && args[1] == "grant" -> {
+                    val uid = args[2].toIntOrNull() ?: return@runCatching null
+                    val pkg = args[3]
+                    val json = """{"name":"${pkg.replace("\"", "\\\"")}","currentUid":$uid,"allowSu":true}"""
+                    val ok = service?.setAppProfile(uid, json) == true
+                    if (ok) ReidExecResult(0, "") else ReidExecResult(1, "setAppProfile failed")
+                }
+                else -> null
+            }
+        }.getOrElse { e ->
+            ReiLog.append(context, ReiLogLevel.W, "reid", "Murasaki profile: ${e.message}")
+            null
         }
     }
 

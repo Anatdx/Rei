@@ -48,7 +48,7 @@
     <string name="home_system_patch_uninstall_uninstalling">卸载中…</string>
     <string name="home_system_patch_uninstall_failed">卸载失败：%1$s</string>
     <string name="home_system_patch_status_unknown">未知（需 root 检测）</string>
-    <string name="home_metamodule_implement">当前元模块</string>
+    <string name="home_metamodule_implement">元模块实现</string>
     <string name="home_zygisk_implement">Zygisk 实现</string>
     <string name="home_module_impl_none">—</string>
 
@@ -68,7 +68,7 @@
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
     <string name="settings_dynamic_color">动态取色 (Android 12+)</string>
-    <string name="settings_dynamic_color_desc">开启后跟随系统壁纸配色（开启时主题色选项不生效）</string>
+    <string name="settings_dynamic_color_desc">开启后跟随系统壁纸配色</string>
     <string name="settings_preset_ice_blue">冰蓝</string>
     <string name="settings_preset_emerald">翡翠</string>
     <string name="settings_preset_sunset">落日</string>
@@ -83,8 +83,6 @@
     <string name="settings_ui_opacity">界面透明度</string>
     <string name="settings_ui_opacity_desc">卡片主体 / 页首页脚 / 边缘高光（联动）</string>
     <string name="settings_root_impl">Root 实现</string>
-    <string name="settings_root_impl_desc">后端自动探测：KernelSU 有 fd/ksud 时判定为 KSU；超级密钥通过鉴权时判定为 KernelPatch。</string>
-    <string name="settings_root_impl_auto">已自动探测，无需手动切换。</string>
     <string name="settings_apatch_superkey">APatch SuperKey</string>
     <string name="settings_superkey_set">已设置（用于 AP/KernelPatch 鉴权）</string>
     <string name="settings_superkey_hint_short">如果您已安装 KP 后端，请输入超级密钥来获得权限。8–63 位，需含字母和数字。</string>
@@ -237,7 +235,7 @@
 
     <!-- App Access (extra) -->
     <string name="app_access_list_title">应用授权列表</string>
-    <string name="app_access_murasaki_hint">Root 与 Murasaki/Shizuku 共用此列表，开关即可授权或撤销。</string>
+    <string name="app_access_murasaki_hint">Root 与 Murasaki/Shizuku 共用此列表。</string>
     <string name="app_access_loading">正在读取应用列表…</string>
     <string name="app_access_visible_stats">可见 %1$d/%2$d（已授权 %3$d；允许=%4$d；排除=%5$d）</string>
     <string name="app_access_excluded_label">已排除（模块修改）</string>
@@ -307,7 +305,7 @@
     <string name="murasaki_retry">重试</string>
     <string name="murasaki_level_shell">SHELL (Shizuku 兼容)</string>
     <string name="murasaki_level_root">ROOT (Sui 兼容)</string>
-    <string name="murasaki_level_kernel">KERNEL (Murasaki 独占)</string>
+    <string name="murasaki_level_kernel">KERNEL</string>
     <string name="murasaki_level_unknown">Unknown (%d)</string>
 
     <!-- Auth (授权弹窗) -->
@@ -319,7 +317,7 @@
     <string name="auth_level_basic_desc">仅允许受限能力（当前等同不授予 su）</string>
     <string name="auth_murasaki_request_message">该应用请求使用 Murasaki/Shizuku 能力，允许后将加入授权列表。</string>
     <string name="auth_request_level_title">请求权限等级</string>
-    <string name="auth_remember_choice">记住选择（下次不再询问）</string>
+    <string name="auth_remember_choice">记住选择</string>
     <string name="auth_deny">拒绝</string>
     <string name="auth_once">仅此一次</string>
     <string name="auth_allow">允许</string>
