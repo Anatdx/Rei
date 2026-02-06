@@ -8,12 +8,16 @@
 
 namespace ksud {
 
-/** Rei 本体入口：仅 reid 专属功能（daemon/murasaki、set-root-impl、version、help） */
+/** Rei main CLI: daemon/Murasaki, flash/boot-info, set-root-impl, allowlist, version, help */
 int reid_cli_run(int argc, char* argv[]);
-/** KernelSU 兼容入口：ksud 次级，完整 KSU 命令集 */
+/** KernelSU compat: ksud sub-CLI, full KSU command set */
 int ksud_cli_run(int argc, char* argv[]);
+/** Partition: boot-info (used by reid, same as ksud) */
+int ksud_cmd_boot_info(const std::vector<std::string>& args);
+/** Partition: flash (used by reid, same as ksud) */
+int ksud_cmd_flash(const std::vector<std::string>& args);
 
-/** 打印版本（reid/ksud 共用） */
+/** Print version (reid/ksud shared) */
 void print_version();
 
 // Command handler type

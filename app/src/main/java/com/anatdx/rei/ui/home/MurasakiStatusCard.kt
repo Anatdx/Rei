@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.anatdx.rei.R
+import com.anatdx.rei.core.reid.ReidClient
 import com.anatdx.rei.ui.components.ReiCard
 import io.murasaki.Murasaki
 import io.murasaki.server.IHymoFsService
@@ -130,7 +131,17 @@ fun MurasakiStatusCard(
         }
     }
 
-    LaunchedEffect(packageName, refreshTrigger) { connect() }
+    /** 先尝试拉起 Murasaki daemon（reid/ksud/apd services），再连接 Binder。解决开机未执行 services 导致服务未启动的问题。 */
+    fun ensureDaemonThenConnect() {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                ReidClient.exec(context, listOf("services"), timeoutMs = 5000L)
+            }
+            connect()
+        }
+    }
+
+    LaunchedEffect(packageName, refreshTrigger) { ensureDaemonThenConnect() }
 
     ReiCard(modifier = modifier) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -190,7 +201,7 @@ fun MurasakiStatusCard(
                 }
                 else -> {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                    ConnectionError(status.error) { connect() }
+                    ConnectionError(status.error) { ensureDaemonThenConnect() }
                 }
             }
         }

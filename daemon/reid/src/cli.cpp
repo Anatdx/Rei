@@ -111,15 +111,16 @@ static void print_reid_usage() {
     printf("Rei userspace daemon\n\n");
     printf("USAGE: reid <COMMAND>\n\n");
     printf("COMMANDS:\n");
-    printf("  daemon              Run as daemon (Binder service, Murasaki)\n");
+    printf("  daemon              Run as daemon (Binder: Murasaki/Shizuku service)\n");
     printf("  post-fs-data        Trigger post-fs-data event\n");
     printf("  services            Trigger service event (start Murasaki daemon)\n");
     printf("  boot-completed      Trigger boot-completed event\n");
     printf("  set-root-impl <ksu|apatch> Set root implementation (ksu or apatch)\n");
-    printf("  kernel reboot [recovery|bootloader|poweroff]  Reboot device (KP/KSU backend)\n");
-    printf("  allowlist get             List UIDs in unified allowlist (one per line)\n");
-    printf("  allowlist grant <uid> <pkg>  Add UID+pkg to allowlist and sync to kernel\n");
-    printf("  allowlist revoke <uid>      Remove UID from allowlist and sync to kernel\n");
+    printf("  kernel reboot [recovery|bootloader|...]  Reboot device\n");
+    printf("  kernel soft_reboot   Restart zygote (soft reboot)\n");
+    printf("  allowlist get|grant|revoke  Unified allowlist (profile)\n");
+    printf("  boot-info <SUB>     Partition/boot info (default-partition, available-partitions, slot-suffix, ...)\n");
+    printf("  flash <SUB> [OPTS]  Partition manager: list, info, slots, image, backup, map, avb, ak3, ...\n");
     printf("  version             Show version\n");
     printf("  help                Show this help\n");
 }
@@ -155,7 +156,7 @@ int reid_cli_run(int argc, char* argv[]) {
     if (cmd == "daemon") {
         return run_daemon();
     }
-    // Murasaki: 与 ksud 一致，支持通过 reid 触发生命周期（Magisk/脚本可调用 reid services）
+    // Murasaki: same as ksud, reid triggers lifecycle (Magisk/scripts can call reid services)
     if (cmd == "post-fs-data") {
         return on_post_data_fs();
     }
@@ -181,8 +182,22 @@ int reid_cli_run(int argc, char* argv[]) {
     }
 
     if (cmd == "kernel") {
-        if (args.empty() || args[0] != "reboot") {
-            printf("USAGE: reid kernel reboot [recovery|bootloader|poweroff]\n");
+        if (args.empty()) {
+            printf("USAGE: reid kernel reboot [recovery|bootloader|poweroff|download|edl] | kernel soft_reboot\n");
+            return 1;
+        }
+        if (args[0] == "soft_reboot") {
+            auto r = exec_command({"/system/bin/setprop", "ctl.restart", "zygote"});
+            if (r.exit_code != 0) {
+                if (!r.stdout_str.empty()) printf("%s", r.stdout_str.c_str());
+                if (!r.stderr_str.empty()) printf("%s", r.stderr_str.c_str());
+                return 1;
+            }
+            printf("OK\n");
+            return 0;
+        }
+        if (args[0] != "reboot") {
+            printf("USAGE: reid kernel reboot [recovery|bootloader|poweroff|download|edl] | kernel soft_reboot\n");
             return 1;
         }
         std::vector<std::string> cmd_line{"/system/bin/reboot"};
@@ -194,6 +209,10 @@ int reid_cli_run(int argc, char* argv[]) {
                 cmd_line.push_back("bootloader");
             } else if (mode == "poweroff") {
                 cmd_line.push_back("-p");
+            } else if (mode == "download") {
+                cmd_line.push_back("download");
+            } else if (mode == "edl") {
+                cmd_line.push_back("edl");
             } else {
                 printf("Unknown reboot mode: %s\n", mode.c_str());
                 return 1;
@@ -249,6 +268,13 @@ int reid_cli_run(int argc, char* argv[]) {
         }
         printf("USAGE: reid allowlist get | grant <uid> <pkg> | revoke <uid>\n");
         return 1;
+    }
+
+    if (cmd == "boot-info") {
+        return ksud_cmd_boot_info(args);
+    }
+    if (cmd == "flash") {
+        return ksud_cmd_flash(args);
     }
 
     printf("Unknown command: %s\n", cmd.c_str());

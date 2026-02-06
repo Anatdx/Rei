@@ -1,5 +1,7 @@
 package com.anatdx.rei.ui.settings
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -110,10 +112,6 @@ fun SettingsScreen(
 
         item {
             SuperkeyCard()
-        }
-
-        item {
-            RootImplCard()
         }
 
         item {
@@ -425,31 +423,6 @@ private fun AppearanceCard(
     }
 }
 
-@Composable
-private fun RootImplCard() {
-    val rootImpl = ReiApplication.rootImplementation
-    val backendLabel = when (rootImpl) {
-        ReiApplication.VALUE_ROOT_IMPL_KSU -> stringResource(R.string.home_root_impl_ksu)
-        else -> stringResource(R.string.home_root_impl_kp)
-    }
-
-    ReiCard {
-        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_root_impl)) },
-                supportingContent = { Text(stringResource(R.string.settings_root_impl_desc)) },
-                leadingContent = { Icon(Icons.Outlined.Tune, contentDescription = null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            ListItem(
-                headlineContent = { Text(backendLabel) },
-                supportingContent = { Text(stringResource(R.string.settings_root_impl_auto)) },
-                leadingContent = { Icon(Icons.Outlined.Build, contentDescription = null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-        }
-    }
-}
 
 @Composable
 private fun SuperkeyCard() {
@@ -641,15 +614,64 @@ private fun ThemePresetRow(
 
 @Composable
 private fun AboutCard() {
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val ver = com.anatdx.rei.BuildConfig.VERSION_NAME
+    val code = com.anatdx.rei.BuildConfig.VERSION_CODE
+
     ReiCard {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_about)) },
                 supportingContent = { Text(stringResource(R.string.settings_about_desc)) },
                 leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                modifier = Modifier.clickable { showDialog = true },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
         }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.size(12.dp))
+                    Text(stringResource(R.string.app_name))
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Version $ver ($code)",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_about_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = "Developed by Anatdx",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Based on KernelSU & APatch",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+        )
     }
 }
 

@@ -195,7 +195,9 @@
     <!-- App Access (extra) -->
     <string name="app_access_list_title">Список доступа приложений</string>
     <string name="app_access_loading">Загрузка списка приложений…</string>
-    <string name="app_access_visible_stats">Видно %1$d/%2$d (разрешено %3$d; allowlist=%4$d)</string>
+    <string name="app_access_visible_stats">Видно %1$d/%2$d (разрешено %3$d; allow=%4$d; exclude=%5$d)</string>
+    <string name="app_access_excluded_label">Исключено (изменения модуля)</string>
+    <string name="app_access_exclude_mod_switch">Исключить изменения модуля</string>
     <string name="app_access_search_hint">Поиск (имя / пакет)</string>
     <string name="app_access_auth_failed">Ошибка авторизации (exit=%d)</string>
     <string name="app_access_error_packages">Не удалось прочитать список приложений устройства</string>

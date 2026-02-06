@@ -278,6 +278,7 @@ int run_daemon() {
     LOGI("Starting ksud daemon...");
 
     (void)ensure_dir_exists(REI_DIR);
+    (void)ensure_murasaki_allowlist_file_exists();  // so Sui sees Rei mode (no Manager/Settings inject)
 
     // Switch to global mount namespace
     // This is crucial for visibility across Apps
@@ -287,8 +288,16 @@ int run_daemon() {
         LOGI("Switched to global mount namespace");
     }
 
-    auto root_impl_opt = read_file(ROOT_IMPL_CONFIG_PATH);
-    std::string root_impl = root_impl_opt ? trim(*root_impl_opt) : "ksu";
+    // Infer backend: root_impl file value, else apd/ksud executable presence
+    std::string root_impl;
+    if (auto opt = read_file(ROOT_IMPL_CONFIG_PATH))
+        root_impl = trim(*opt);
+    if (root_impl != "apatch" && root_impl != "ksu") {
+        if (access(APD_DAEMON_PATH, X_OK) == 0)
+            root_impl = "apatch";
+        else
+            root_impl = "ksu";
+    }
     allowlist_sync_to_backend(root_impl);
 
     // Patch SEPolicy to allow Binder communication

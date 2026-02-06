@@ -3,11 +3,11 @@ package com.anatdx.rei
 import android.util.Log
 import androidx.annotation.Keep
 
-/** KP 超级调用 JNI：鉴权与提权。 */
+/** Rei JNI: AP/KP supercall only. KSU via [KsuNatives] (same reijni, different JNI entries). */
 object ApNatives {
-    private val libLoaded: Boolean = runCatching { System.loadLibrary("apjni") }.fold(
+    private val libLoaded: Boolean = runCatching { System.loadLibrary("reijni") }.fold(
         onSuccess = { true },
-        onFailure = { e -> Log.e("Rei", "loadLibrary(apjni) failed", e); false }
+        onFailure = { e -> Log.e("Rei", "loadLibrary(reijni) failed", e); false }
     )
 
     @Keep
@@ -51,7 +51,7 @@ object ApNatives {
     fun kernelPatchVersion(superKey: String): Long = runCatching { nativeKernelPatchVersion(superKey) }.getOrElse { 0L }
     fun diag(superKey: String): String = runCatching { nativeDiag(superKey) }.getOrElse { "" }
 
-    fun suUids(superKey: String): IntArray = runCatching { nativeSuUids(superKey) }.getOrElse { intArrayOf() }
+    fun suUids(superKey: String): IntArray = runCatching { nativeSuUids(superKey) }.getOrNull() ?: intArrayOf()
     fun grantSu(superKey: String, uid: Int, toUid: Int = 0, scontext: String? = null): Long =
         runCatching { nativeGrantSu(superKey, uid, toUid, scontext) }.getOrElse { -1L }
     fun revokeSu(superKey: String, uid: Int): Long =

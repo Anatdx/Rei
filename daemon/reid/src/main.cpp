@@ -6,8 +6,8 @@
 #include <string>
 #include <unistd.h>
 
-// 单二进制 + 硬链接：reid/apd/ksud 同一 inode，根据 argv[0] 的 basename 分发。切换 APatch/KernelSU 需重启。
-// 当以 su 被调用时（内核 su_path 指向本二进制），按 /proc/self/exe 解析出的路径判断走 apd 还是 ksud，避免误入 reid 报 Unknown command。
+// Single binary + hardlinks: reid/apd/ksud same inode, dispatch by argv[0] basename. Switch APatch/KernelSU needs reboot.
+// When invoked as su (kernel su_path), use /proc/self/exe to choose apd vs ksud and avoid reid "Unknown command".
 int main(int argc, char* argv[]) {
     (void)chdir("/");
 

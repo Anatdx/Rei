@@ -1,40 +1,47 @@
 package com.anatdx.rei
 
+import androidx.annotation.Keep
+
 /**
- * KernelSU JNI bridge (YukiSU-style).
- *
- * This matches the kernel communication model used by YukiSU manager:
- * - `System.loadLibrary("kernelsu")`
- * - direct ioctl via native code (not via ksud CLI)
+ * KernelSU JNI: KSU API via reijni (same .so as ApNatives, different JNI entry points).
+ * Loads reijni, no separate libkernelsu.
  */
 object KsuNatives {
     init {
-        System.loadLibrary("kernelsu")
+        System.loadLibrary("reijni")
     }
 
-    val version: Int
-        external get
+    @Keep
+    private external fun nGetVersion(): Int
+    @Keep
+    private external fun nGetAllowList(): IntArray
+    @Keep
+    private external fun isSafeModeNative(): Boolean
+    @Keep
+    private external fun isManagerNative(): Boolean
+    @Keep
+    private external fun isKsuDriverPresentNative(): Boolean
+    @Keep
+    private external fun nSetAppProfile(profile: Profile): Boolean
 
-    val allowList: IntArray
-        external get
+    val version: Int get() = runCatching { nGetVersion() }.getOrElse { 0 }
 
-    val isSafeMode: Boolean
-        external get
+    val allowList: IntArray get() = runCatching { nGetAllowList() }.getOrNull() ?: intArrayOf()
 
-    val isLkmMode: Boolean
-        external get
+    val isSafeMode: Boolean get() = runCatching { isSafeModeNative() }.getOrElse { false }
 
-    val isManager: Boolean
-        external get
+    val isLkmMode: Boolean get() = false
 
-    val isKsuDriverPresent: Boolean
-        external get
+    val isManager: Boolean get() = runCatching { isManagerNative() }.getOrElse { false }
 
-    val lastErrno: Int
-        external get
+    val isKsuDriverPresent: Boolean get() = runCatching { isKsuDriverPresentNative() }.getOrElse { false }
 
-    external fun getAppProfile(key: String, uid: Int): Profile?
-    external fun setAppProfile(profile: Profile): Boolean
+    val lastErrno: Int get() = 0
+
+    fun getAppProfile(key: String, uid: Int): Profile? = null
+
+    fun setAppProfile(profile: Profile): Boolean =
+        runCatching { nSetAppProfile(profile) }.getOrElse { false }
 
     data class Profile(
         val name: String = "",
@@ -43,4 +50,3 @@ object KsuNatives {
         val nonRootUseDefault: Boolean = true,
     )
 }
-

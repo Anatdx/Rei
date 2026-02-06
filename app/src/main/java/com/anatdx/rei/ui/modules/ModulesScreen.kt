@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -25,14 +28,19 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,8 +54,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.anatdx.rei.R
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
+import com.anatdx.rei.R
 import androidx.compose.ui.unit.dp
 import com.anatdx.rei.core.io.UriFiles
 import com.anatdx.rei.core.reid.ReidClient
@@ -73,13 +82,16 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
     var listError by rememberSaveable { mutableStateOf<String?>(null) }
     var opError by rememberSaveable { mutableStateOf<String?>(null) }
 
-    var installZip by rememberSaveable { mutableStateOf("") } // absolute path in app cache
+    var installZip by rememberSaveable { mutableStateOf("") }
     var installZipLabel by rememberSaveable { mutableStateOf("") }
     var pendingInstall by rememberSaveable { mutableStateOf<PendingInstall?>(null) }
+    var showInstallConfirm by rememberSaveable { mutableStateOf(false) }
+    var installInProgress by rememberSaveable { mutableStateOf(false) }
+    var installResult by rememberSaveable { mutableStateOf<Pair<Int, String>?>(null) }
 
     fun canUseRoot(): Boolean = rootAccessState is RootAccessState.Granted
 
-    val pickZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val pickZip = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val f = withContext(Dispatchers.IO) {
@@ -89,8 +101,17 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                 installZip = f.absolutePath
                 installZipLabel = f.name
                 pendingInstall = withContext(Dispatchers.IO) { scanModuleZip(f.absolutePath) }
+                showInstallConfirm = true
             }
         }
+    }
+
+    LaunchedEffect(installInProgress) {
+        if (!installInProgress || installZip.isBlank()) return@LaunchedEffect
+        val zipPath = installZip
+        val r = ReidClient.exec(ctx, listOf("module", "install", zipPath), timeoutMs = 180_000L)
+        installResult = r.exitCode to r.output
+        installInProgress = false
     }
 
     suspend fun refresh() {
@@ -106,7 +127,16 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
             modules = emptyList()
         } else {
             runCatching {
-                modules = parseModuleListJson(r.output)
+                val list = parseModuleListJson(r.output)
+                modules = list.sortedWith(
+                    compareBy<ModuleEntry> { m ->
+                        when {
+                            m.enabled && m.metamodule -> 0
+                            m.enabled -> 1
+                            else -> 2
+                        }
+                    }.thenBy { it.name.lowercase() }
+                )
             }.onFailure { t ->
                 listError = t.javaClass.simpleName
                 modules = emptyList()
@@ -181,54 +211,6 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             )
                         }
-                    }
-                }
-            }
-
-            if (installZip.isNotBlank()) {
-                item {
-                    ReiCard {
-                        ListItem(
-                            headlineContent = { Text(stringResource(R.string.modules_pending_install)) },
-                            supportingContent = {
-                                val p = pendingInstall
-                                val line1 = p?.name?.takeIf { it.isNotBlank() } ?: installZipLabel.ifBlank { installZip }
-                                val line2 = buildString {
-                                    if (p?.id?.isNotBlank() == true) append(p.id)
-                                    if (p?.version?.isNotBlank() == true) append(" · ").append(p.version)
-                                    if (p?.author?.isNotBlank() == true) append(" · ").append(p.author)
-                                }.ifBlank { installZipLabel.ifBlank { installZip } }
-                                Text("$line1\n$line2")
-                            },
-                            leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
-                            trailingContent = {
-                                IconButton(
-                                    enabled = canUseRoot() && !loading,
-                                    onClick = {
-                                        installZip = ""
-                                        installZipLabel = ""
-                                        pendingInstall = null
-                                    },
-                                ) { Icon(Icons.Outlined.Close, contentDescription = null) }
-                            },
-                            modifier = Modifier.clickable(enabled = canUseRoot() && !loading) {
-                                val zip = installZip.trim()
-                                scope.launch {
-                                    if (!canUseRoot() || loading) return@launch
-                                    loading = true
-                                    val r = ReidClient.exec(ctx, listOf("module", "install", zip), timeoutMs = 180_000L)
-                                    opError = if (r.exitCode == 0) null else "exit=${r.exitCode}"
-                                    loading = false
-                                    if (r.exitCode == 0) {
-                                        installZip = ""
-                                        installZipLabel = ""
-                                        pendingInstall = null
-                                        refresh()
-                                    }
-                                }
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
                     }
                 }
             }
@@ -327,12 +309,121 @@ fun ModulesScreen(rootAccessState: RootAccessState) {
         }
 
         FloatingActionButton(
-            onClick = { pickZip.launch(arrayOf("*/*")) },
+            onClick = { pickZip.launch("*/*") },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         ) {
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+        }
+
+        if (showInstallConfirm && pendingInstall != null) {
+            val p = pendingInstall!!
+            val nameLine = p.name.takeIf { it.isNotBlank() } ?: p.id.ifBlank { installZipLabel }
+            AlertDialog(
+                onDismissRequest = {
+                    showInstallConfirm = false
+                    installZip = ""
+                    installZipLabel = ""
+                    pendingInstall = null
+                },
+                title = { Text(stringResource(R.string.modules_install_confirm_title)) },
+                text = { Text(stringResource(R.string.modules_install_confirm_message, nameLine)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showInstallConfirm = false
+                            if (canUseRoot() && installZip.isNotBlank()) installInProgress = true
+                        },
+                    ) {
+                        Text(stringResource(R.string.modules_install_install_btn))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showInstallConfirm = false
+                            installZip = ""
+                            installZipLabel = ""
+                            pendingInstall = null
+                        },
+                    ) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+
+        if (installInProgress) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(16.dp))
+                    Text(stringResource(R.string.modules_install_running))
+                }
+            }
+        }
+
+        installResult?.let { (code, output) ->
+            val success = code == 0
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        text = if (success) stringResource(R.string.modules_install_success)
+                        else stringResource(R.string.modules_install_failed, code),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (success) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.modules_install_output),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), MaterialTheme.shapes.medium)
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = output.ifBlank { "(no output)" },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            installResult = null
+                            installZip = ""
+                            installZipLabel = ""
+                            pendingInstall = null
+                            scope.launch { refresh() }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.modules_install_close))
+                    }
+                }
+            }
         }
         }
     }
@@ -349,6 +440,7 @@ private data class ModuleEntry(
     val remove: Boolean,
     val action: Boolean,
     val web: Boolean,
+    val metamodule: Boolean = false,
 )
 
 private fun parseModuleListJson(raw: String): List<ModuleEntry> {
@@ -367,6 +459,7 @@ private fun parseModuleListJson(raw: String): List<ModuleEntry> {
             remove = o.boolCompat("remove"),
             action = o.boolCompat("action"),
             web = o.boolCompat("web"),
+            metamodule = o.boolCompat("metamodule"),
         )
     }
     return out

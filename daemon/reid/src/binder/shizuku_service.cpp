@@ -1,7 +1,7 @@
-// Shizuku 兼容服务 - C++ 原生实现
-// 直接用 libbinder_ndk 实现完整的 IShizukuService
+// Shizuku compat service - C++ native impl via libbinder_ndk
 
 #include "shizuku_service.hpp"
+#include "../core/allowlist.hpp"
 #include "../ksud/ksucalls.hpp"
 #include "../log.hpp"
 #include "binder_wrapper.hpp"
@@ -17,7 +17,7 @@
 #include <cstring>
 #include <fstream>
 
-// 系统属性操作
+// System property access
 extern "C" {
 int __system_property_get(const char* name, char* value);
 int __system_property_set(const char* name, const char* value);
@@ -26,7 +26,7 @@ int __system_property_set(const char* name, const char* value);
 namespace ksud {
 namespace shizuku {
 
-// 使用 murasaki 命名空间的 BinderWrapper
+// Use murasaki BinderWrapper
 using murasaki::BinderWrapper;
 
 // Binder callbacks (shared)
@@ -51,13 +51,13 @@ RemoteProcessHolder::RemoteProcessHolder(pid_t pid, int stdin_fd, int stdout_fd,
       exited_(false) {
     auto& bw = BinderWrapper::instance();
 
-    // 创建 Binder class (只需一次)
+    // Create Binder class (once)
     if (!binderClass_ && bw.AIBinder_Class_define) {
         binderClass_ = bw.AIBinder_Class_define(REMOTE_PROCESS_DESCRIPTOR, Binder_onCreate,
                                                 Binder_onDestroy, RemoteProcessHolder::onTransact);
     }
 
-    // 创建 Binder 对象
+    // Create Binder instance
     if (bw.AIBinder_new) {
         binder_ = bw.AIBinder_new(binderClass_, this);
     }
@@ -108,7 +108,7 @@ int RemoteProcessHolder::waitFor() {
 int RemoteProcessHolder::exitValue() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!exited_) {
-        // 非阻塞检查
+        // Non-blocking check
         int status;
         pid_t result = waitpid(pid_, &status, WNOHANG);
         if (result > 0) {
@@ -152,7 +152,7 @@ bool RemoteProcessHolder::alive() {
 }
 
 bool RemoteProcessHolder::waitForTimeout(int64_t timeout_ms) {
-    // 简化实现：轮询检查
+    // Polling wait
     int64_t elapsed = 0;
     while (elapsed < timeout_ms) {
         if (!alive())
@@ -197,7 +197,7 @@ binder_status_t RemoteProcessHolder::onTransact(AIBinder* binder, transaction_co
     switch (code) {
     case TRANSACTION_getOutputStream: {
         int fd = holder->getOutputStream();
-        // 返回 ParcelFileDescriptor - 需要 dup 一份
+        // Return ParcelFileDescriptor (dup for transfer)
         int dupFd = dup(fd);
         WRITE_NO_EXCEPTION_RP();
         if (bw.AParcel_writeParcelFileDescriptor)
@@ -250,7 +250,7 @@ binder_status_t RemoteProcessHolder::onTransact(AIBinder* binder, transaction_co
         int64_t timeout;
         if (bw.AParcel_readInt64)
             bw.AParcel_readInt64(in, &timeout);
-        // 忽略 unit 参数，假设是毫秒
+        // Ignore unit, assume ms
         const char* unit = nullptr;
         if (bw.AParcel_readString)
             bw.AParcel_readString(in, &unit, nullptr);
@@ -291,7 +291,7 @@ int ShizukuService::init() {
 
     LOGI("Initializing Shizuku compatible service...");
 
-    // 初始化 Binder wrapper
+    // Init Binder wrapper
     auto& bw = BinderWrapper::instance();
     if (!bw.init()) {
         LOGE("Failed to init binder wrapper for Shizuku");
@@ -303,7 +303,7 @@ int ShizukuService::init() {
         return -1;
     }
 
-    // 创建 Binder class
+    // Create Binder class
     binderClass_ = bw.AIBinder_Class_define(SHIZUKU_DESCRIPTOR, Binder_onCreate, Binder_onDestroy,
                                             ShizukuService::onTransact);
 
@@ -312,23 +312,23 @@ int ShizukuService::init() {
         return -1;
     }
 
-    // 创建 Binder 对象
+    // Create Binder instance
     binder_ = bw.AIBinder_new(binderClass_, this);
     if (!binder_) {
         LOGE("Failed to create Shizuku binder");
         return -1;
     }
 
-    // 注册到 ServiceManager
+    // Register with ServiceManager
     if (!bw.AServiceManager_addService) {
         LOGE("AServiceManager_addService not available");
         return -1;
     }
 
-    // 尝试多个服务名以提高兼容性
+    // Try multiple service names for compat
     const char* serviceNames[] = {
-        "user_service",                        // Shizuku 标准名
-        "moe.shizuku.server.IShizukuService",  // 完整描述符
+        "user_service",
+        "moe.shizuku.server.IShizukuService",
     };
 
     bool registered = false;
@@ -355,7 +355,7 @@ void ShizukuService::startThreadPool() {
         return;
     running_ = true;
 
-    // Binder 线程池已由 Murasaki 服务启动
+    // Binder thread pool started by Murasaki
     LOGI("Shizuku service ready");
 }
 
@@ -370,50 +370,13 @@ uid_t ShizukuService::getCallingUid() {
 
 bool ShizukuService::checkCallerPermission(uid_t uid) {
     if (uid == 0 || uid == 2000)
-        return true;  // root 和 shell
+        return true;  // root and shell
 
-    // 1. 检查内存缓存 (Runtime Allow)
-    // 必须先检查缓存，因为 handleRequestPermission 可能已经授权了
-    if (auto* client = findClient(uid, 0)) {  // PID 0 means ignore PID check if logical
-        // findClient 需要准确的 PID，但这里我们只有 UID
-        // 实际上 checkCallerPermission 通常在 IPC 上下文中调用，可以获取 PID
-        // 但目前设计 checkCallerPermission 只接受 UID
-        // 我们需要遍历 map 或者修改数据结构。
-        // 简单起见，这里暂时只依赖 KSU allowlist，
-        // 真正的缓存检查放在 handleCheckSelfPermission 中。
-    }
+    // 1. Rei allowlist (same as Murasaki app access list)
+    if (allowlist_contains_uid(static_cast<int32_t>(uid)))
+        return true;
 
-    // 2. 检查 KSU allowlist (.allowlist 文件)
-    // 复用 murasaki_binder.cpp 的逻辑
-    const char* allowlist_path = "/data/adb/ksu/.allowlist";
-    std::ifstream ifs(allowlist_path, std::ios::binary);
-    if (!ifs)
-        return false;
-
-    uint32_t magic, version;
-    ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-    ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
-
-    if (magic != 0x7f4b5355)
-        return false;
-
-    // 简化：读取 profile 检查 uid
-    struct {
-        uint32_t version;
-        char key[256];
-        int32_t current_uid;
-        uint8_t allow_su;
-        char padding[3];
-        char rest[512];  // root_profile 等
-    } profile;
-
-    while (ifs.read(reinterpret_cast<char*>(&profile), sizeof(profile))) {
-        if (profile.current_uid == static_cast<int32_t>(uid) && profile.allow_su) {
-            return true;
-        }
-    }
-
-    // 检查本地权限缓存
+    // 2. Local runtime permission cache
     std::lock_guard<std::mutex> lock(permMutex_);
     auto it = permissions_.find(uid);
     return it != permissions_.end() && it->second;
@@ -439,7 +402,7 @@ ClientRecord* ShizukuService::requireClient(uid_t uid, pid_t pid) {
         return it->second.get();
     }
 
-    // 创建新记录
+    // Create new record
     auto record = std::make_unique<ClientRecord>();
     record->uid = uid;
     record->pid = pid;
@@ -457,7 +420,7 @@ RemoteProcessHolder* ShizukuService::createProcess(const std::vector<std::string
     if (cmd.empty())
         return nullptr;
 
-    // 创建管道
+    // Create pipes
     int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
     if (pipe(stdin_pipe) < 0 || pipe(stdout_pipe) < 0 || pipe(stderr_pipe) < 0) {
         LOGE("Failed to create pipes");
@@ -477,10 +440,10 @@ RemoteProcessHolder* ShizukuService::createProcess(const std::vector<std::string
     }
 
     if (pid == 0) {
-        // 子进程
-        close(stdin_pipe[1]);   // 关闭写端
-        close(stdout_pipe[0]);  // 关闭读端
-        close(stderr_pipe[0]);  // 关闭读端
+        // Child
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
 
         dup2(stdin_pipe[0], STDIN_FILENO);
         dup2(stdout_pipe[1], STDOUT_FILENO);
@@ -490,32 +453,32 @@ RemoteProcessHolder* ShizukuService::createProcess(const std::vector<std::string
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        // 切换工作目录
+        // chdir
         if (!dir.empty()) {
             chdir(dir.c_str());
         }
 
-        // 设置环境变量
+        // setenv
         for (const auto& e : env) {
             putenv(strdup(e.c_str()));
         }
 
-        // 准备参数
+        // argv
         std::vector<char*> argv;
         for (const auto& c : cmd) {
             argv.push_back(strdup(c.c_str()));
         }
         argv.push_back(nullptr);
 
-        // 执行
+        // exec
         execvp(argv[0], argv.data());
         _exit(127);
     }
 
-    // 父进程
-    close(stdin_pipe[0]);   // 关闭读端
-    close(stdout_pipe[1]);  // 关闭写端
-    close(stderr_pipe[1]);  // 关闭写端
+    // Parent
+    close(stdin_pipe[0]);
+    close(stdout_pipe[1]);
+    close(stderr_pipe[1]);
 
     return new RemoteProcessHolder(pid, stdin_pipe[1], stdout_pipe[0], stderr_pipe[0]);
 }
@@ -597,7 +560,7 @@ binder_status_t ShizukuService::handleGetVersion(const AParcel* in, AParcel* out
     uid_t uid = getCallingUid();
     if (!checkCallerPermission(uid)) {
         LOGW("getVersion: permission denied for uid %d", uid);
-        // 仍然返回版本，但记录警告
+        // Return version anyway but log warning
     }
     WRITE_NO_EXCEPTION();
     if (BW.AParcel_writeInt32)
@@ -617,7 +580,7 @@ binder_status_t ShizukuService::handleCheckPermission(const AParcel* in, AParcel
     std::string permission;
     BW.readString(in, permission);
 
-    // 简化实现：返回 PERMISSION_GRANTED (0)
+    // Return PERMISSION_GRANTED (0)
     WRITE_NO_EXCEPTION();
     if (BW.AParcel_writeInt32)
         BW.AParcel_writeInt32(out, 0);
@@ -632,7 +595,7 @@ binder_status_t ShizukuService::handleNewProcess(const AParcel* in, AParcel* out
         return STATUS_PERMISSION_DENIED;
     }
 
-    // 读取命令数组
+    // Read command array
     int32_t cmdCount = 0;
     if (BW.AParcel_readInt32)
         BW.AParcel_readInt32(in, &cmdCount);
@@ -643,7 +606,7 @@ binder_status_t ShizukuService::handleNewProcess(const AParcel* in, AParcel* out
         cmd.push_back(str);
     }
 
-    // 读取环境变量数组
+    // Read env array
     int32_t envCount = 0;
     if (BW.AParcel_readInt32)
         BW.AParcel_readInt32(in, &envCount);
@@ -654,13 +617,13 @@ binder_status_t ShizukuService::handleNewProcess(const AParcel* in, AParcel* out
         env.push_back(str);
     }
 
-    // 读取工作目录
+    // Read cwd
     std::string dir;
     BW.readString(in, dir);
 
     LOGI("newProcess: cmd[0]=%s, uid=%d", cmd.empty() ? "(empty)" : cmd[0].c_str(), uid);
 
-    // 创建进程
+    // Create process
     auto* holder = createProcess(cmd, env, dir);
     if (!holder) {
         LOGE("Failed to create process");
@@ -669,7 +632,7 @@ binder_status_t ShizukuService::handleNewProcess(const AParcel* in, AParcel* out
 
     // AIDL protocol: write status code first
     WRITE_NO_EXCEPTION();
-    // 返回 IRemoteProcess binder
+    // Return IRemoteProcess binder
     if (BW.AParcel_writeStrongBinder)
         BW.AParcel_writeStrongBinder(out, holder->getBinder());
 
@@ -684,7 +647,7 @@ binder_status_t ShizukuService::handleGetSELinuxContext(const AParcel* in, AParc
     if (f) {
         fread(context, 1, sizeof(context) - 1, f);
         fclose(f);
-        // 去掉换行
+        // Strip newline
         size_t len = strlen(context);
         if (len > 0 && context[len - 1] == '\n') {
             context[len - 1] = '\0';
@@ -739,19 +702,17 @@ binder_status_t ShizukuService::handleCheckSelfPermission(const AParcel* in, APa
 
     bool allowed = false;
 
-    // 1. 检查 Runtime Cache (findClient)
-    // findClient 需要准确的 PID。如果同一个 UID 的不同进程请求，可能需要注意。
-    // Shizuku Client 建立连接后通常复用。
+    // 1. Runtime cache (findClient by PID; same UID multi-process may need care)
     if (auto* client = findClient(uid, pid)) {
         if (client->allowed) {
             allowed = true;
         }
     }
 
-    // 2. 如果缓存没过，检查 KSU Root 权限
+    // 2. If not cached, check KSU root
     if (!allowed && checkCallerPermission(uid)) {
         allowed = true;
-        // 更新缓存
+        // Update cache
         auto* client = requireClient(uid, pid);
         client->allowed = true;
     }
@@ -772,45 +733,32 @@ binder_status_t ShizukuService::handleRequestPermission(const AParcel* in, AParc
     uid_t uid = getCallingUid();
     pid_t pid = BW.AIBinder_getCallingPid ? BW.AIBinder_getCallingPid() : 0;
 
-    // 1. 如果已经在 KSU 白名单或 Root，直接通过
+    // 1. If in KSU allowlist or root, allow
     if (checkCallerPermission(uid)) {
         LOGI("Auto-granting permission for uid %d (in KSU allowlist or root)", uid);
         if (auto* client = requireClient(uid, pid)) {
             client->allowed = true;
             if (client->applicationBinder) {
-                // 回调通知
-                // IShizukuApplication::dispatchRequestPermissionResult = 2 (oneway)
-                // void dispatchRequestPermissionResult(int requestCode, in Bundle data);
-                // 构造 Bundle 比较麻烦，需要 writeInt(length), writeInt(magic)...
-                // 暂时略过回掉，因为 client->allowed = true 后，客户端下一次 checkSelfPermission
-                // 就会通过 通常 requestPermission 不需要即使回调，客户端轮询或者等待 Activity
-                // Result
+                // Callback skipped: Bundle is heavy; next checkSelfPermission will pass
             }
         }
     } else {
-        // 2. 启动 Manager Activity 请求授权
-        LOGI("Requesting permission for uid %d pid %d via Manager Activity", uid, pid);
+        // 2. Launch Rei AuthorizeActivity (Murasaki/Shizuku)
+        LOGI("Requesting permission for uid %d pid %d via Rei AuthorizeActivity", uid, pid);
 
         pid_t forks = fork();
         if (forks == 0) {
-            // Child process
             std::string uidStr = std::to_string(uid);
-            std::string pidStr = std::to_string(pid);
-            std::string reqStr = std::to_string(requestCode);
-
-            // am start -n com.anatdx.yukisu/com.anatdx.yukisu.ui.shizuku.RequestPermissionActivity
-            // --ei uid <uid> --ei pid <pid> --ei request_code <code> --user 0
+            // Rei AuthorizeActivity: rei.extra.UID, rei.extra.SOURCE=murasaki
             execlp("am", "am", "start", "-n",
-                   "com.anatdx.yukisu/com.anatdx.yukisu.ui.shizuku.RequestPermissionActivity",
-                   "--ei", "uid", uidStr.c_str(), "--ei", "pid", pidStr.c_str(), "--ei",
-                   "request_code", reqStr.c_str(), "--user", "0", nullptr);
-            _exit(127);  // execlp failed
+                   "com.anatdx.rei/com.anatdx.rei.ui.auth.AuthorizeActivity",
+                   "--ei", "rei.extra.UID", uidStr.c_str(),
+                   "--es", "rei.extra.SOURCE", "murasaki",
+                   "--user", "0", nullptr);
+            _exit(127);
         } else if (forks > 0) {
-            // Parent process, wait for child to avoid zombie?
-            // Better to let init handle it or waitpid WNOHANG
             int status;
-            waitpid(forks, &status,
-                    0);  // Blocking wait for 'am' to finish starting activity is fine
+            waitpid(forks, &status, 0);
         }
     }
 
@@ -823,8 +771,7 @@ binder_status_t ShizukuService::handleAttachApplication(const AParcel* in, AParc
     if (BW.AParcel_readStrongBinder)
         BW.AParcel_readStrongBinder(in, &appBinder);
 
-    // 读取 Bundle args (简化处理)
-    // Bundle 序列化比较复杂，这里只记录客户端
+    // Read Bundle args (simplified); just record client
 
     uid_t uid = getCallingUid();
     pid_t pid = BW.AIBinder_getCallingPid ? BW.AIBinder_getCallingPid() : 0;
@@ -859,7 +806,7 @@ binder_status_t ShizukuService::handleIsHidden(const AParcel* in, AParcel* out) 
     if (BW.AParcel_readInt32)
         BW.AParcel_readInt32(in, &uid);
 
-    // 简化：所有 App 都不隐藏
+    // No app hidden
     WRITE_NO_EXCEPTION();
     if (BW.AParcel_writeBool)
         BW.AParcel_writeBool(out, false);
@@ -873,7 +820,7 @@ binder_status_t ShizukuService::handleGetFlagsForUid(const AParcel* in, AParcel*
     if (BW.AParcel_readInt32)
         BW.AParcel_readInt32(in, &mask);
 
-    // 简化实现
+    // Simplified
     WRITE_NO_EXCEPTION();
     if (BW.AParcel_writeInt32)
         BW.AParcel_writeInt32(out, 0);
@@ -897,15 +844,14 @@ binder_status_t ShizukuService::handleUpdateFlagsForUid(const AParcel* in, AParc
     }
 
     // Shizuku Constants: FLAG_ALLOWED = 8 (1<<3), MASK_PERMISSION = 4 (1<<2) ?
-    // 实际上我们在 Manager 端应该发送正确的 flag。
-    // 这里只要被调用，且 value & 8，就授权。
+    // If called with value & 8, grant.
     bool is_allowed = (value & 8) != 0;
 
-    // 但是这里要注意，如果 mask 包含 MASK_PERMISSION (4), 则更新 allowed
+    // If mask has MASK_PERMISSION (4), update allowed
     if ((mask & 4) != 0) {
         LOGI("updateFlagsForUid: uid=%d allowed=%d", uid, is_allowed);
         std::lock_guard<std::mutex> lock(clientsMutex_);
-        // 遍历更新所有匹配 UID 的客户端
+        // Update all clients matching UID
         for (auto& pair : clients_) {
             if (pair.second->uid == (uid_t)uid) {
                 pair.second->allowed = is_allowed;
@@ -920,7 +866,7 @@ binder_status_t ShizukuService::handleUpdateFlagsForUid(const AParcel* in, AParc
 #undef WRITE_NO_EXCEPTION
 #undef BW
 
-// ==================== 启动函数 ====================
+// ==================== Entry ====================
 
 void start_shizuku_service() {
     auto& service = ShizukuService::getInstance();

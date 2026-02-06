@@ -17,7 +17,7 @@ sealed class ReidStartResult {
     data class Failed(val reason: String) : ReidStartResult()
 }
 
-/** 系统补丁（reid）安装状态，用于首页展示 */
+/** Reid install status for home UI */
 sealed class ReidInstallStatus {
     data object Unknown : ReidInstallStatus()
     data object NotInstalled : ReidInstallStatus()
@@ -25,10 +25,10 @@ sealed class ReidInstallStatus {
 }
 
 object ReidLauncher {
-    /** APatch: 与 IcePatch 一致，先通知内核 su path（安装前即调用，不依赖 root） */
+    /** APatch: notify kernel su path before install (no root required) */
     private const val LEGACY_SU_PATH = "/system/bin/su"
 
-    /** 查询系统补丁是否已安装；按当前后端（apd/ksud）查版本，首页显示对应 daemon 名。 */
+    /** Check if reid is installed; version by backend (apd/ksud) for home daemon name */
     suspend fun getInstallStatus(context: Context): ReidInstallStatus {
         return withContext(Dispatchers.IO) {
             val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
@@ -49,7 +49,7 @@ object ReidLauncher {
 
     suspend fun start(context: Context): ReidStartResult {
         return withContext(Dispatchers.IO) {
-            // APatch: 先 sync su path 到内核（与 IcePatch installApatch 首行 Natives.resetSuPath(LEGACY_SU_PATH) 一致）
+            // APatch: sync su path to kernel (same as IcePatch installApatch first line)
             if (ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH && ReiApplication.superKey.isNotEmpty()) {
                 val ok = ApNatives.resetSuPath(ReiApplication.superKey, LEGACY_SU_PATH)
                 Log.i("Rei", "resetSuPath(ReidLauncher start)=$ok")
@@ -69,7 +69,7 @@ object ReidLauncher {
             val useApd = ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH
             val reiDir = "/data/adb/rei"
 
-            // 单二进制 reid，仅按当前后端创建对应 daemon 硬链接（apd 或 ksud），不同时装两个。
+            // Only create/update the daemon link for the current backend; do not remove the other (KSU vs KP may both be installed).
             val installCmd = buildString {
                 fun esc(s: String) = s.replace("'", "'\\''")
 
@@ -79,11 +79,10 @@ object ReidLauncher {
                 append("SRC='").append(esc(srcReid)).append("'; ")
                 append("if [ ! -f '").append(dstReid).append("' ] || ! cmp -s \"\$SRC\" '").append(dstReid).append("'; then ")
                 append("cp -f \"\$SRC\" '").append(dstReid).append(".new'; chmod 0755 '").append(dstReid).append(".new'; mv -f '").append(dstReid).append(".new' '").append(dstReid).append("'; fi; ")
-                append("rm -f '").append(apd).append("' '").append(ksud).append("'; ")
                 if (useApd) {
-                    append("ln '").append(dstReid).append("' '").append(apd).append("'; ")
+                    append("rm -f '").append(apd).append("'; ln '").append(dstReid).append("' '").append(apd).append("'; ")
                 } else {
-                    append("ln '").append(dstReid).append("' '").append(ksud).append("'; ")
+                    append("rm -f '").append(ksud).append("'; ln '").append(dstReid).append("' '").append(ksud).append("'; ")
                 }
 
                 append("(restorecon -F '").append(dstReid).append("'")
@@ -117,18 +116,33 @@ object ReidLauncher {
                 return@withContext ReidStartResult.Failed("install_failed:${install.exitCode}:${install.output.take(160)}")
             }
 
-            // APatch: 安装后再次通知内核（与 IcePatch 一致，确保 su_path 与内核同步）
+            // APatch: notify kernel again after install (keep su_path in sync)
             if (ReiApplication.rootImplementation == ReiApplication.VALUE_ROOT_IMPL_APATCH && ReiApplication.superKey.isNotEmpty()) {
                 val ok = ApNatives.resetSuPath(ReiApplication.superKey, LEGACY_SU_PATH)
                 Log.i("Rei", "resetSuPath(ReidLauncher after install)=$ok")
             }
 
-            // Start daemon with backend path so argv[0] basename is apd/ksud（reid 单二进制按 argv[0] 分发）
+            // Start daemon so argv[0] basename is apd/ksud (reid single binary dispatches by argv[0])
             val daemonBin = if (useApd) apd else ksud
             val startCmd = "sh -c '(pidof ${if (useApd) "apd" else "ksud"} >/dev/null 2>&1) || ($daemonBin daemon >/dev/null 2>&1 &)'"
             val started = RootShell.exec(startCmd, timeoutMs = 5_000L)
             if (started.exitCode == 0) ReidStartResult.Started
             else ReidStartResult.Failed("start_failed:${started.exitCode}:${started.output.take(160)}")
+        }
+    }
+
+    /** Uninstall: stop daemon, remove /data/adb/reid, apd, ksud and /data/adb/rei */
+    suspend fun uninstall(context: Context): ReidStartResult {
+        return withContext(Dispatchers.IO) {
+            val cmd = (
+                "killall reid 2>/dev/null; killall apd 2>/dev/null; killall ksud 2>/dev/null; true; " +
+                "rm -f /data/adb/apd /data/adb/ksud /data/adb/reid; " +
+                "rm -rf /data/adb/rei; " +
+                "echo OK"
+            )
+            val r = RootShell.exec(cmd, timeoutMs = 10_000L)
+            if (r.exitCode == 0 && r.output.trim().contains("OK")) ReidStartResult.Started
+            else ReidStartResult.Failed("uninstall_failed:${r.exitCode}:${r.output.take(160)}")
         }
     }
 

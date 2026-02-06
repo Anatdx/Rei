@@ -17,6 +17,10 @@ android {
         applicationId = "com.anatdx.rei"
         minSdk = androidMinSdkVersion
         targetSdk = androidTargetSdkVersion
+        ndk {
+            abiFilters.clear()
+            abiFilters.addAll(setOf("armeabi-v7a", "arm64-v8a", "x86_64"))
+        }
         val code = (rootProject.findProperty("reiVersionCode") as String?)?.toIntOrNull() ?: 10000
         versionCode = code
         versionName = "1.0.${(code - 10000).coerceAtLeast(0)}"
@@ -91,11 +95,11 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// ---------- 唯一 native 后端：reid（apd+ksud 合一，安装时硬链接为 reid/apd/ksud）----------
+// reid native daemon (apd+ksud), built as libreid.so
 val outJniDir = layout.buildDirectory.dir("generated/jniLibs/arm64-v8a").get().asFile
 val buildDir = layout.buildDirectory.get().asFile
 
-// reid 单二进制构建（daemon/reid → libreid.so），内含 apd 与 ksud 逻辑，按 argv[0] 分发
+// reid single binary (daemon/reid -> libreid.so), apd+ksud by argv[0]
 val reidSrcDir = rootProject.file("daemon/reid")
 val reidBuildDir = File(buildDir, "reid-build")
 val reidOutSo = File(outJniDir, "libreid.so")
@@ -132,6 +136,6 @@ tasks.named("preBuild").configure {
     dependsOn(tasks.named("buildReidArm64"))
 }
 
-// 将 generated jniLibs（libreid.so）纳入 APK；merge 需要「根目录下为 ABI 子目录」的结构，故添加 arm64-v8a 的父目录
+// include generated jniLibs (libreid.so) under ABI dir for merge
 val outJniLibsRoot = outJniDir.parentFile
 android.sourceSets.getByName("main").jniLibs.directories.add(outJniLibsRoot.absolutePath)

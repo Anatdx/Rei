@@ -200,7 +200,9 @@
     <!-- App Access (extra) -->
     <string name="app_access_list_title">App access list</string>
     <string name="app_access_loading">Loading app list…</string>
-    <string name="app_access_visible_stats">Visible %1$d/%2$d (granted %3$d; allowlist=%4$d)</string>
+    <string name="app_access_visible_stats">Visible %1$d/%2$d (granted %3$d; allow=%4$d; exclude=%5$d)</string>
+    <string name="app_access_excluded_label">Excluded (module changes)</string>
+    <string name="app_access_exclude_mod_switch">Exclude module changes</string>
     <string name="app_access_search_hint">Search (name / package)</string>
     <string name="app_access_auth_failed">Auth failed (exit=%d)</string>
     <string name="app_access_error_packages">Failed to read device app list</string>

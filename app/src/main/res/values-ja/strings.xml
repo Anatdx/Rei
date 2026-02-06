@@ -195,7 +195,9 @@
     <!-- App Access (extra) -->
     <string name="app_access_list_title">アプリ許可一覧</string>
     <string name="app_access_loading">アプリ一覧を読み込み中…</string>
-    <string name="app_access_visible_stats">表示 %1$d/%2$d（許可済み %3$d、allowlist=%4$d）</string>
+    <string name="app_access_visible_stats">表示 %1$d/%2$d（許可済み %3$d、allow=%4$d、exclude=%5$d）</string>
+    <string name="app_access_excluded_label">除外済み（モジュール変更）</string>
+    <string name="app_access_exclude_mod_switch">モジュール変更を除外</string>
     <string name="app_access_search_hint">検索（名前 / パッケージ）</string>
     <string name="app_access_auth_failed">許可操作失敗 (exit=%d)</string>
     <string name="app_access_error_packages">端末のアプリ一覧を読み込めませんでした</string>

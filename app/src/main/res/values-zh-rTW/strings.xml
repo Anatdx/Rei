@@ -195,7 +195,9 @@
     <!-- App Access (extra) -->
     <string name="app_access_list_title">應用授權列表</string>
     <string name="app_access_loading">正在讀取應用列表…</string>
-    <string name="app_access_visible_stats">可見 %1$d/%2$d（可見已授權 %3$d；allowlist=%4$d）</string>
+    <string name="app_access_visible_stats">可見 %1$d/%2$d（已授權 %3$d；允許=%4$d；排除=%5$d）</string>
+    <string name="app_access_excluded_label">已排除（模組修改）</string>
+    <string name="app_access_exclude_mod_switch">排除模組修改</string>
     <string name="app_access_search_hint">搜索（名称 / 包名）</string>
     <string name="app_access_auth_failed">授權操作失败 (exit=%d)</string>
     <string name="app_access_error_packages">未能讀取本机應用列表</string>

@@ -195,7 +195,9 @@
     <!-- App Access (extra) -->
     <string name="app_access_list_title">Liste d\'accès aux apps</string>
     <string name="app_access_loading">Chargement de la liste des apps…</string>
-    <string name="app_access_visible_stats">Visibles %1$d/%2$d (autorisés %3$d ; allowlist=%4$d)</string>
+    <string name="app_access_visible_stats">Visibles %1$d/%2$d (autorisés %3$d ; allow=%4$d ; exclude=%5$d)</string>
+    <string name="app_access_excluded_label">Exclu (modifications module)</string>
+    <string name="app_access_exclude_mod_switch">Exclure les modifications module</string>
     <string name="app_access_search_hint">Recherche (nom / paquet)</string>
     <string name="app_access_auth_failed">Échec d\'autorisation (exit=%d)</string>
     <string name="app_access_error_packages">Impossible de lire la liste des apps de l\'appareil</string>

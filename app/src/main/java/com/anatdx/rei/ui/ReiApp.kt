@@ -241,8 +241,6 @@ fun ReiApp(
                             rootAccessState = rootAccessState,
                             onRefreshRoot = onRefreshRoot,
                             onOpenSettings = { navController.navigate(ReiDest.Settings.route) },
-                            onOpenLogs = { navController.navigate("settings/logs") },
-                            onOpenBootTools = { navController.navigate("settings/boot_tools") },
                         )
                     }
                     composable(ReiDest.Modules.route) { ModulesScreen(rootAccessState) }
@@ -277,30 +275,26 @@ fun ReiApp(
                                     snackbarHostState.showSnackbar("需要 Root 权限")
                                     return@launch
                                 }
-                                val cmd = when (action) {
-                                    "重启" -> "reboot"
-                                    "Recovery" -> "reboot recovery"
-                                    "Bootloader" -> "reboot bootloader"
-                                    "关机" -> "reboot -p"
-                                    else -> null
-                                }
-                                if (cmd == null) {
-                                    snackbarHostState.showSnackbar("未知操作：$action")
-                                    return@launch
-                                }
-                                val args = when (cmd) {
-                                    "reboot" -> listOf("kernel", "reboot")
-                                    "reboot recovery" -> listOf("kernel", "reboot", "recovery")
-                                    "reboot bootloader" -> listOf("kernel", "reboot", "bootloader")
-                                    "reboot -p" -> listOf("kernel", "reboot", "poweroff")
+                                val args = when (action) {
+                                    "重启" -> listOf("kernel", "reboot")
+                                    "软重启" -> listOf("kernel", "soft_reboot")
+                                    "Recovery" -> listOf("kernel", "reboot", "recovery")
+                                    "Bootloader" -> listOf("kernel", "reboot", "bootloader")
+                                    "Download" -> listOf("kernel", "reboot", "download")
+                                    "EDL" -> listOf("kernel", "reboot", "edl")
                                     else -> emptyList()
                                 }
                                 if (args.isEmpty()) {
                                     snackbarHostState.showSnackbar("未知操作：$action")
                                     return@launch
                                 }
-                                val r = ReidClient.exec(ctx, args, timeoutMs = 10_000L)
-                                snackbarHostState.showSnackbar("执行：$action（exit=${r.exitCode}）")
+                                // kernel reboot only in reid; apd/ksud have no such subcommand, use execReid
+                                val r = ReidClient.execReid(ctx, args, timeoutMs = 10_000L)
+                                if (r.exitCode == 0) {
+                                    snackbarHostState.showSnackbar("已执行：$action")
+                                } else {
+                                    snackbarHostState.showSnackbar("执行失败：$action（exit=${r.exitCode}）${r.output.take(80).let { if (it.isBlank()) "" else " $it" }}")
+                                }
                             }
                         },
                     )

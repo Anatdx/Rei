@@ -19,8 +19,11 @@ std::string allowlist_get_package_for_uid(int32_t uid);
 
 void allowlist_sync_to_backend(const std::string& impl);
 
-/** 将当前统一允许列表的 UID 写入 Rei 目录下的 Murasaki 白名单文件，供 Zygisk 桥接读取 */
+/** Write current allowlist UIDs to Murasaki allowlist file under Rei dir (Zygisk/Sui) */
 void allowlist_write_murasaki_allowlist_file();
+
+/** Create empty file if missing so Sui etc. detect Rei mode */
+void ensure_murasaki_allowlist_file_exists();
 
 bool allowlist_grant_to_backend(int32_t uid, const std::string& package);
 bool allowlist_revoke_from_backend(int32_t uid);

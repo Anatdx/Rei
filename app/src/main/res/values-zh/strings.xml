@@ -44,7 +44,13 @@
     <string name="home_system_patch_install_btn">安装系统补丁</string>
     <string name="home_system_patch_install_installing">安装中…</string>
     <string name="home_system_patch_install_failed">安装失败：%1$s</string>
+    <string name="home_system_patch_uninstall_btn">卸载系统补丁</string>
+    <string name="home_system_patch_uninstall_uninstalling">卸载中…</string>
+    <string name="home_system_patch_uninstall_failed">卸载失败：%1$s</string>
     <string name="home_system_patch_status_unknown">未知（需 root 检测）</string>
+    <string name="home_metamodule_implement">当前元模块</string>
+    <string name="home_zygisk_implement">Zygisk 实现</string>
+    <string name="home_module_impl_none">—</string>
 
     <string name="logs_filter_all">全部</string>
     <string name="logs_filter_info">信息</string>
@@ -216,6 +222,14 @@
     <string name="modules_no_root">未获取 Root（模块管理需要 Root）</string>
     <string name="modules_read_failed">读取失败</string>
     <string name="modules_op_failed">操作失败</string>
+    <string name="modules_install_confirm_title">安装模块</string>
+    <string name="modules_install_confirm_message">安装「%1$s」？\n\n将执行模块的标准安装脚本（customize.sh）。</string>
+    <string name="modules_install_install_btn">安装</string>
+    <string name="modules_install_running">正在安装…</string>
+    <string name="modules_install_success">安装成功</string>
+    <string name="modules_install_failed">安装失败 (exit=%d)</string>
+    <string name="modules_install_output">安装输出</string>
+    <string name="modules_install_close">关闭</string>
     <string name="modules_pending_install">待安装模块</string>
     <string name="modules_undo_uninstall">取消卸载</string>
     <string name="modules_uninstall">卸载</string>
@@ -223,10 +237,14 @@
 
     <!-- App Access (extra) -->
     <string name="app_access_list_title">应用授权列表</string>
+    <string name="app_access_murasaki_hint">Root 与 Murasaki/Shizuku 共用此列表，开关即可授权或撤销。</string>
     <string name="app_access_loading">正在读取应用列表…</string>
-    <string name="app_access_visible_stats">可见 %1$d/%2$d（可见已授权 %3$d；allowlist=%4$d）</string>
+    <string name="app_access_visible_stats">可见 %1$d/%2$d（已授权 %3$d；允许=%4$d；排除=%5$d）</string>
+    <string name="app_access_excluded_label">已排除（模块修改）</string>
+    <string name="app_access_exclude_mod_switch">排除模块修改</string>
     <string name="app_access_search_hint">搜索（名称 / 包名）</string>
     <string name="app_access_auth_failed">授权操作失败 (exit=%d)</string>
+    <string name="app_access_exclude_errno_daemon">排除设置失败（errno=1）。请保持 Rei 在后台运行或确认 KernelSU 守护进程已启动后再试。</string>
     <string name="app_access_error_packages">未能读取本机应用列表</string>
 
     <!-- Boot Tools -->
@@ -291,4 +309,25 @@
     <string name="murasaki_level_root">ROOT (Sui 兼容)</string>
     <string name="murasaki_level_kernel">KERNEL (Murasaki 独占)</string>
     <string name="murasaki_level_unknown">Unknown (%d)</string>
+
+    <!-- Auth (授权弹窗) -->
+    <string name="auth_level_root">Root</string>
+    <string name="auth_level_shell">Shell</string>
+    <string name="auth_level_basic">受限</string>
+    <string name="auth_level_root_desc">允许该应用获取完整 Root 权限</string>
+    <string name="auth_level_shell_desc">允许该应用以 Shell 级别执行命令</string>
+    <string name="auth_level_basic_desc">仅允许受限能力（当前等同不授予 su）</string>
+    <string name="auth_murasaki_request_message">该应用请求使用 Murasaki/Shizuku 能力，允许后将加入授权列表。</string>
+    <string name="auth_request_level_title">请求权限等级</string>
+    <string name="auth_remember_choice">记住选择（下次不再询问）</string>
+    <string name="auth_deny">拒绝</string>
+    <string name="auth_once">仅此一次</string>
+    <string name="auth_allow">允许</string>
+    <string name="auth_allow_remember">允许并记住</string>
+
+    <!-- 电源菜单 -->
+    <string name="power_menu_title">电源菜单</string>
+    <string name="power_menu_reboot">重启</string>
+    <string name="power_menu_soft_reboot">软重启</string>
+    <string name="power_menu_cancel">取消</string>
 </resources>

@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace ksud {
 
@@ -61,6 +63,14 @@ void allowlist_write_murasaki_allowlist_file() {
         oss << uid << '\n';
     }
     (void)write_file(REI_MURASAKI_ALLOWLIST_PATH, oss.str());
+    chmod(REI_MURASAKI_ALLOWLIST_PATH, 0644);  // so Sui/Zygisk can read when running as root
+}
+
+void ensure_murasaki_allowlist_file_exists() {
+    if (access(REI_MURASAKI_ALLOWLIST_PATH, F_OK) != 0) {
+        (void)write_file(REI_MURASAKI_ALLOWLIST_PATH, "");
+        chmod(REI_MURASAKI_ALLOWLIST_PATH, 0644);
+    }
 }
 
 bool allowlist_add(int32_t uid, const std::string& package) {

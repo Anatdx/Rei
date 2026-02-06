@@ -581,6 +581,9 @@ static int cmd_profile(const std::vector<std::string>& args) {
         int ret = set_app_profile(p);
         if (ret < 0) {
             printf("Failed to set app profile (errno=%d:%s)\n", errno, strerror(errno));
+            if (errno == 1) {
+                printf("Hint: profile set-allow needs kernel fd; keep daemon (Rei/ksud) running in background or run from a process that has the fd.\n");
+            }
             return 1;
         }
         printf("OK\n");
@@ -599,8 +602,8 @@ static int cmd_profile(const std::vector<std::string>& args) {
     return 1;
 }
 
-// Boot info subcommand handlers
-static int cmd_boot_info(const std::vector<std::string>& args) {
+// Boot info subcommand handlers (also used by reid for partition manager)
+int ksud_cmd_boot_info(const std::vector<std::string>& args) {
     if (args.empty()) {
         printf("USAGE: ksud boot-info <SUBCOMMAND>\n\n");
         printf("SUBCOMMANDS:\n");
@@ -634,7 +637,7 @@ static int cmd_boot_info(const std::vector<std::string>& args) {
     return 1;
 }
 
-// Flash subcommand handlers
+// Flash subcommand handlers (also used by reid for partition manager)
 static int cmd_flash_new(const std::vector<std::string>& args) {
     using namespace flash;
 
@@ -857,6 +860,10 @@ static int cmd_flash_new(const std::vector<std::string>& args) {
     return 1;
 }
 
+int ksud_cmd_flash(const std::vector<std::string>& args) {
+    return cmd_flash_new(args);
+}
+
 int ksud_cli_run(int argc, char* argv[]) {
     log_init("KernelSU");
 
@@ -949,7 +956,7 @@ int ksud_cli_run(int argc, char* argv[]) {
     } else if (cmd == "boot-restore") {
         return boot_restore(args);
     } else if (cmd == "boot-info") {
-        return cmd_boot_info(args);
+        return ksud_cmd_boot_info(args);
     } else if (cmd == "umount") {
         return cmd_umount(args);
     } else if (cmd == "kernel") {

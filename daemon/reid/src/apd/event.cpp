@@ -25,6 +25,8 @@
 namespace apd {
 
 namespace {
+void ForkMurasakiDaemon();
+
 bool RunStage(const std::string& stage, const std::string& superkey, bool block) {
   Umask(0);
   if (HasMagisk()) {
@@ -133,29 +135,36 @@ bool OnPostDataFs(const std::string& superkey) {
   RunStage("post-mount", superkey, true);
   chdir("/");
 
+  // APatch: start Murasaki (reid daemon) from post-fs-data so mrsk works even when
+  // "services" stage is not invoked (e.g. some APatch/KernelPatch setups).
+  ForkMurasakiDaemon();
+
   return true;
 }
 
-bool OnServices(const std::string& superkey) {
-  LOGI("on_services triggered!");
-  // Murasaki daemon: fork child, register Binder service for Zygisk bridge
+namespace {
+void ForkMurasakiDaemon() {
   pid_t pid = fork();
   if (pid < 0) {
     LOGW("Failed to fork Murasaki daemon: %s", strerror(errno));
-    RunStage("service", superkey, false);
-    return true;
+    return;
   }
   if (pid == 0) {
     (void)EnsureDirExists("/data/adb/rei");
-    std::string root_impl = Trim(ReadFile("/data/adb/ksu/root_impl"));
-    if (root_impl.empty()) root_impl = "ap";
-    ksud::allowlist_sync_to_backend(root_impl);
+    ksud::allowlist_sync_to_backend("apatch");
     LOGI("Murasaki daemon child (pid %d), exec reid daemon...", getpid());
     char* const argv[] = {"reid", "daemon", nullptr};
     execv("/data/adb/reid", argv);
     _exit(127);
   }
   LOGI("Murasaki daemon forked (child pid %d)", pid);
+}
+}  // namespace
+
+bool OnServices(const std::string& superkey) {
+  LOGI("on_services triggered!");
+  // Murasaki: also start from services if triggered (idempotent if already running)
+  ForkMurasakiDaemon();
   RunStage("service", superkey, false);
   return true;
 }

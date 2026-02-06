@@ -186,7 +186,7 @@ int RootShell(int argc, char** argv) {
     SwitchMntNs(1);
   }
 
-  // APatch: su path 由管理器 resetSuPath 设置，密钥只在 app 存储不落盘。执行 su 时由内核根据白名单提权，本进程应已是 root。
+  // APatch: su path set by manager resetSuPath; key in app only. Kernel elevates by allowlist; this process is already root.
   if (geteuid() != 0) {
     LOGE("RootShell: not root (euid=%u), kernel did not elevate", geteuid());
     return 1;

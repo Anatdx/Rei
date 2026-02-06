@@ -6,6 +6,11 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.content.pm.PackageManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,10 +50,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.anatdx.rei.ApNatives
 import com.anatdx.rei.R
 import com.anatdx.rei.ReiApplication
 import com.anatdx.rei.core.reid.ReidClient
+import com.anatdx.yukisu.Natives as YukiSuNatives
 import com.anatdx.rei.core.reid.ReidExecResult
 import com.anatdx.rei.ui.components.PullToRefreshBox
 import com.anatdx.rei.ui.components.ReiCard
@@ -58,8 +63,10 @@ import kotlinx.coroutines.withContext
 
 private data class AppEntry(
     val packageName: String,
+    val appName: String,
     val uid: Int,
     val granted: Boolean,
+    val excluded: Boolean = false,
     val isSystem: Boolean,
 )
 
@@ -74,6 +81,7 @@ fun AppAccessListScreen() {
     var showSystemApps by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     suspend fun refresh() {
         loading = true
@@ -93,10 +101,10 @@ fun AppAccessListScreen() {
         apps.asSequence()
             .filter { a ->
                 if (q.isBlank()) true
-                else a.packageName.contains(q, ignoreCase = true)
+                else a.packageName.contains(q, ignoreCase = true) || a.appName.contains(q, ignoreCase = true)
             }
             .filter { a -> showSystemApps || !a.isSystem }
-            .sortedBy { it.packageName.lowercase() }
+            .sortedWith(compareBy({ !it.granted }, { it.appName.lowercase() }))
             .toList()
     }
 
@@ -106,19 +114,85 @@ fun AppAccessListScreen() {
 
     fun updateStatsFrom(list: List<AppEntry>) {
         val granted = list.count { it.granted }
-        stats = stats.copy(allowlistCount = granted, grantedCount = granted)
+        val excluded = list.count { it.excluded }
+        stats = stats.copy(allowlistCount = granted, grantedCount = granted, denylistCount = excluded)
+    }
+
+    fun requestToggleExclude(app: AppEntry, toExclude: Boolean) {
+        val key = "exclude:${keyOf(app)}"
+        if (pending.contains(key)) return
+        val uidStr = app.uid.toString()
+        val pkg = app.packageName
+        
+        // Exclude => no root. Un-exclude => only change excluded, do not touch granted.
+        val newGranted = if (toExclude) false else app.granted
+        val newExcluded = toExclude
+
+        val newApps = apps.map {
+            if (it.packageName == pkg && it.uid == app.uid)
+                it.copy(excluded = newExcluded, granted = newGranted)
+            else it
+        }
+        apps = newApps
+        updateStatsFrom(newApps)
+        pending = pending + key
+        scope.launch {
+            val jniOk = runCatching {
+                YukiSuNatives.setAppProfile(
+                    YukiSuNatives.Profile(
+                        name = pkg,
+                        currentUid = app.uid,
+                        uid = app.uid,
+                        allowSu = newGranted,
+                        nonRootUseDefault = false,
+                        umountModules = newExcluded
+                    )
+                )
+            }.getOrElse { false }
+            
+            // reid exec fallback for exclude is risky if we don't have a specific command for umount/denylist.
+            // set-allow only touches allowlist. If we are excluding (toExclude=true), set-allow 0 is partially correct (revokes root).
+            // But if we are un-excluding, set-allow 1 is WRONG (grants root).
+            // So we only fallback if toExclude=true (revoke root).
+            val result = if (jniOk) ReidExecResult(0, "")
+            else if (toExclude) runCatching {
+                ReidClient.exec(ctx, listOf("profile", "set-allow", uidStr, pkg, "0"), timeoutMs = 10_000L)
+            }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+            else ReidExecResult(1, "JNI failed and no fallback for un-exclude")
+
+            pending = pending - key
+            if (result.exitCode != 0) {
+                val reverted = apps.map {
+                    if (it.packageName == pkg && it.uid == app.uid) it.copy(excluded = app.excluded, granted = app.granted) else it
+                }
+                apps = reverted
+                updateStatsFrom(reverted)
+                lastError = when {
+                    result.output.contains("errno=1") -> ctx.getString(R.string.app_access_exclude_errno_daemon)
+                    else -> result.output.ifBlank { ctx.getString(R.string.app_access_auth_failed, result.exitCode) }.take(200)
+                }
+            } else {
+                lastError = null
+                refresh()
+            }
+        }
     }
 
     fun requestToggle(app: AppEntry) {
         val key = keyOf(app)
         if (pending.contains(key)) return
-        val uid = app.uid.toString()
+        val uidStr = app.uid.toString()
         val pkg = app.packageName
         val to = !app.granted
 
-        // Optimistic UI update; silent execution.
+        // Root => not excluded. Revoke root => only change granted, do not touch excluded.
+        val newGranted = to
+        val newExcluded = if (to) false else app.excluded
+
         val newApps = apps.map {
-            if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = !app.granted) else it
+            if (it.packageName == pkg && it.uid == app.uid)
+                it.copy(granted = newGranted, excluded = newExcluded)
+            else it
         }
         apps = newApps
         updateStatsFrom(newApps)
@@ -126,29 +200,31 @@ fun AppAccessListScreen() {
 
         scope.launch {
             pending = pending - key
-            // Prefer ksud profile set-allow; then apd allowlist grant/revoke; fallback JNI ApNatives
-            var result = runCatching {
-                ReidClient.exec(ctx, listOf("profile", "set-allow", uid, pkg, if (to) "1" else "0"), timeoutMs = 10_000L)
+            val jniOk = runCatching {
+                YukiSuNatives.setAppProfile(
+                    YukiSuNatives.Profile(
+                        name = pkg,
+                        currentUid = app.uid,
+                        uid = app.uid,
+                        allowSu = newGranted,
+                        nonRootUseDefault = false,
+                        umountModules = newExcluded
+                    )
+                )
+            }.getOrElse { false }
+            
+            val result = if (jniOk) ReidExecResult(0, "")
+            else runCatching {
+                // Fallback: set-allow handles allowSu. It does NOT handle umountModules.
+                // If we are granting (to=true), set-allow 1 is fine (and hopefully backend clears denylist?).
+                // If we are revoking (to=false), set-allow 0 is fine.
+                // But this fallback might de-sync umountModules state if backend doesn't handle linkage.
+                ReidClient.exec(ctx, listOf("profile", "set-allow", uidStr, pkg, if (to) "1" else "0"), timeoutMs = 10_000L)
             }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+            
             if (result.exitCode != 0) {
-                val apdArgs = if (to) listOf("allowlist", "grant", uid, pkg) else listOf("allowlist", "revoke", uid)
-                result = runCatching {
-                    ReidClient.exec(ctx, apdArgs, timeoutMs = 10_000L)
-                }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
-            }
-            if (result.exitCode != 0) {
-                val superKey = ReiApplication.superKey
-                if (superKey.isNotEmpty() && ApNatives.ready(superKey)) {
-                    val rc = if (to) ApNatives.grantSu(superKey, app.uid, 0, null)
-                    else ApNatives.revokeSu(superKey, app.uid)
-                    if (rc == 0L) {
-                        lastError = null
-                        refresh()
-                        return@launch
-                    }
-                }
                 val reverted = apps.map {
-                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted) else it
+                    if (it.packageName == pkg && it.uid == app.uid) it.copy(granted = app.granted, excluded = app.excluded) else it
                 }
                 apps = reverted
                 updateStatsFrom(reverted)
@@ -175,10 +251,18 @@ fun AppAccessListScreen() {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_access_list_title)) },
                     supportingContent = {
-                        Text(
-                            if (loading) stringResource(R.string.app_access_loading)
-                            else stringResource(R.string.app_access_visible_stats, filtered.size, apps.size, visibleGranted, stats.allowlistCount)
-                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.app_access_murasaki_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                if (loading) stringResource(R.string.app_access_loading)
+                                else stringResource(R.string.app_access_visible_stats, filtered.size, apps.size, visibleGranted, stats.allowlistCount, stats.denylistCount)
+                            )
+                        }
                     },
                     leadingContent = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -225,27 +309,65 @@ fun AppAccessListScreen() {
         items(filtered.size) { idx ->
             val app = filtered[idx]
             val key = keyOf(app)
+            val excludeKey = "exclude:$key"
             ReiCard {
-                ListItem(
-                    headlineContent = { Text(app.packageName) },
-                    supportingContent = {
-                        Text(
-                            if (app.isSystem) stringResource(R.string.app_access_system_app, app.uid) else stringResource(R.string.app_access_user_app, app.uid)
-                        )
-                    },
-                    leadingContent = { AppIcon(pkg = app.packageName) },
-                    trailingContent = {
-                        Switch(
-                            checked = app.granted,
-                            enabled = !pending.contains(key),
-                            onCheckedChange = { requestToggle(app) },
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        requestToggle(app)
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text(app.appName) },
+                        supportingContent = {
+                            Column {
+                                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    if (app.isSystem) stringResource(R.string.app_access_system_app, app.uid) else stringResource(R.string.app_access_user_app, app.uid)
+                                )
+                                if (app.excluded) {
+                                    Text(
+                                        stringResource(R.string.app_access_excluded_label),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        },
+                        leadingContent = { AppIcon(pkg = app.packageName) },
+                        trailingContent = {
+                            Switch(
+                                checked = app.granted,
+                                enabled = !pending.contains(key),
+                                onCheckedChange = { requestToggle(app) },
+                            )
+                        },
+                        modifier = Modifier.clickable {
+                            if (app.granted) requestToggle(app)
+                            else expandedKeys = if (key in expandedKeys) expandedKeys - key else expandedKeys + key
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                    AnimatedVisibility(
+                        visible = !app.granted && expandedKeys.contains(key),
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.app_access_exclude_mod_switch),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = app.excluded,
+                                enabled = !pending.contains(excludeKey),
+                                onCheckedChange = { requestToggleExclude(app, it) },
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -268,6 +390,7 @@ private fun parseProfileAllowlistJson(output: String): Set<Int> {
 private data class AuthStats(
     val allowlistCount: Int = 0,
     val grantedCount: Int = 0,
+    val denylistCount: Int = 0,
 )
 
 private data class ManagerViewResult(
@@ -282,40 +405,57 @@ private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
         return ManagerViewResult(entries = emptyList(), stats = AuthStats(), error = ctx.getString(R.string.app_access_error_packages))
     }
 
-    // Prefer ksud profile allowlist; then apd allowlist get; fallback JNI ApNatives.suUids
+    // Prefer YukiSU kernelsu JNI (libkernelsu from YukiSU); fallback to reid exec
     var allow = emptySet<Int>()
+    var deny = emptySet<Int>()
+    var useJni = false
     var allowError: String? = null
-    val profileResult = runCatching {
-        ReidClient.exec(ctx, listOf("profile", "allowlist"), timeoutMs = 10_000L)
-    }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
-    if (profileResult.exitCode == 0) {
-        allow = parseProfileAllowlistJson(profileResult.output)
-    } else {
-        val apdResult = runCatching {
-            ReidClient.exec(ctx, listOf("allowlist", "get"), timeoutMs = 10_000L)
+    runCatching {
+        if (YukiSuNatives.isManager) {
+            val arr = YukiSuNatives.allowList
+            if (arr.isNotEmpty()) allow = arr.toSet()
+            useJni = true
+        }
+    }
+    
+    if (!useJni) {
+        val profileResult = runCatching {
+            ReidClient.exec(ctx, listOf("profile", "allowlist"), timeoutMs = 10_000L)
         }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
-        if (apdResult.exitCode == 0) {
-            allow = parseProfileAllowlistJson(apdResult.output)
+        if (profileResult.exitCode == 0) {
+            allow = parseProfileAllowlistJson(profileResult.output)
         } else {
-            allowError = profileResult.output.ifBlank { apdResult.output }.take(200)
-            val superKey = ReiApplication.superKey
-            if (superKey.isNotEmpty() && ApNatives.ready(superKey)) {
-                allow = ApNatives.suUids(superKey).toSet()
-                allowError = null
-            }
+            allowError = profileResult.output.take(200)
+        }
+    
+        // Deny list (exclude list): KernelSU profile denylist (only needed if JNI unused)
+        val denylistResult = runCatching {
+            ReidClient.exec(ctx, listOf("profile", "denylist"), timeoutMs = 10_000L)
+        }.getOrElse { ReidExecResult(1, it.message.orEmpty()) }
+        if (denylistResult.exitCode == 0) {
+            deny = parseProfileAllowlistJson(denylistResult.output)
         }
     }
 
+    // Root cannot be excluded: if in allowlist, never show as excluded.
     val out = pkgs.map { p ->
+        val granted = allow.contains(p.uid)
+        val isExcluded = if (granted) false else {
+            if (useJni) runCatching { YukiSuNatives.uidShouldUmount(p.uid) }.getOrDefault(false)
+            else deny.contains(p.uid)
+        }
         AppEntry(
             packageName = p.packageName,
+            appName = p.appName,
             uid = p.uid,
             isSystem = p.isSystem,
-            granted = allow.contains(p.uid),
+            granted = granted,
+            excluded = isExcluded,
         )
     }
     val granted = out.count { it.granted }
-    val stats = AuthStats(allowlistCount = allow.size, grantedCount = granted)
+    val excludedCount = out.count { it.excluded }
+    val stats = AuthStats(allowlistCount = allow.size, grantedCount = granted, denylistCount = excludedCount)
 
     val err = allowError
     return ManagerViewResult(entries = out, stats = stats, error = err)
@@ -323,6 +463,7 @@ private suspend fun queryManagerViewDirect(ctx: Context): ManagerViewResult {
 
 private data class InstalledPkg(
     val packageName: String,
+    val appName: String,
     val uid: Int,
     val isSystem: Boolean,
 )
@@ -339,7 +480,8 @@ private suspend fun queryInstalledPackages(ctx: Context): List<InstalledPkg> {
                 val ai = p.applicationInfo
                 val uid = ai?.uid ?: -1
                 val isSystem = ai != null && (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                if (pkg.isNotBlank() && uid >= 0) out += InstalledPkg(packageName = pkg, uid = uid, isSystem = isSystem)
+                val appName = ai?.loadLabel(pm)?.toString()?.trim().orEmpty().ifBlank { pkg }
+                if (pkg.isNotBlank() && uid >= 0) out += InstalledPkg(packageName = pkg, appName = appName, uid = uid, isSystem = isSystem)
             }
             out
         }.getOrDefault(emptyList())

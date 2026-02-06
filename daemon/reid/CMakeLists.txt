@@ -105,9 +105,9 @@ set(SOURCES
     ${ASSETS_CPP}
 )
 
-# Android：单二进制 reid = reid + apd + ksud（硬链接 apd/ksud 同 inode），切换需重启。
+# Single binary reid = reid + apd + ksud (hardlinks); switch backend needs reboot.
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
-  set(APD_VERSION_CODE "0")
+  set(APD_VERSION_CODE "11190")
   set(APD_VERSION_NAME "reid-apd-ksud")
   set(APD_VERSION_HPP ${GENERATED_DIR}/apd_version.hpp)
   configure_file(
@@ -125,7 +125,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
   add_library(reid_apd_supercall STATIC ${APD_SUPERCALL_SOURCES})
   target_include_directories(reid_apd_supercall PUBLIC ${CMAKE_SOURCE_DIR}/src/apd ${GENERATED_DIR})
   target_link_libraries(reid_apd_supercall PRIVATE log)
-  # 完整 apd CLI 并入 reid，供 argv[0]==apd 时使用
+  # Full apd CLI in reid when argv[0]==apd
   list(APPEND SOURCES
       src/apd/cli.cpp
       src/apd/event.cpp

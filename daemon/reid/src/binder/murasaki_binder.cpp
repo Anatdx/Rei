@@ -1,5 +1,5 @@
 // Murasaki Binder Service - Native Implementation
-// 使用 libbinder_ndk 向 ServiceManager 注册服务
+// Register service with ServiceManager via libbinder_ndk
 // Android-only: Uses libbinder_ndk API
 
 #ifdef __ANDROID__
@@ -27,13 +27,13 @@
 namespace ksud {
 namespace murasaki {
 
-// 系统属性操作（与 Shizuku 兼容层保持一致）
+// System property (same as Shizuku compat)
 extern "C" {
 int __system_property_get(const char* name, char* value);
 int __system_property_set(const char* name, const char* value);
 }
 
-// 服务版本
+// Service version
 static constexpr int32_t MURASAKI_VERSION = 1;
 
 // AIDL interface descriptors (MUST match murasaki-api/aidl)
@@ -55,7 +55,7 @@ static void Binder_onDestroy(void* userData) {
 
 }  // namespace
 
-// ==================== 子服务：IHymoFsService / IKernelService / IModuleService ====================
+// ==================== Sub-services: IHymoFsService / IKernelService / IModuleService ====================
 
 static binder_status_t onTransactHymo(AIBinder* binder, transaction_code_t code, const AParcel* in,
                                       AParcel* out);
@@ -134,13 +134,13 @@ int MurasakiBinderService::init() {
 
     auto& bw = BinderWrapper::instance();
 
-    // 检查必要的函数是否加载成功
+    // Check required functions loaded
     if (!bw.AIBinder_Class_define || !bw.AIBinder_new) {
         LOGE("Required binder functions not available");
         return -ENOSYS;
     }
 
-    // 创建 Binder class
+    // Create Binder class
     binderClass_ =
         bw.AIBinder_Class_define(DESCRIPTOR_MURASAKI,
                                  Binder_onCreate,   // onCreate - NEW: required, pass-through args
@@ -152,14 +152,14 @@ int MurasakiBinderService::init() {
         return -EINVAL;
     }
 
-    // 创建 Binder 对象，传入 this 作为 user data
+    // Create Binder with this as user data
     binder_ = bw.AIBinder_new(binderClass_, this);
     if (!binder_) {
         LOGE("Failed to create binder");
         return -ENOMEM;
     }
 
-    // 创建子服务 Binder（返回给客户端）
+    // Create sub-service Binder (returned to client)
     hymoClass_ = bw.AIBinder_Class_define(DESCRIPTOR_HYMO, Binder_onCreate, Binder_onDestroy,
                                          onTransactHymo);
     kernelClass_ = bw.AIBinder_Class_define(DESCRIPTOR_KERNEL, Binder_onCreate, Binder_onDestroy,
@@ -177,7 +177,7 @@ int MurasakiBinderService::init() {
         moduleBinder_ = bw.AIBinder_new(moduleClass_, this);
     }
 
-    // 注册到 ServiceManager
+    // Register with ServiceManager
     if (!bw.AServiceManager_addService) {
         LOGE("AServiceManager_addService not available");
         if (bw.AIBinder_decStrong)
@@ -217,7 +217,7 @@ void MurasakiBinderService::startThreadPool() {
 
     running_ = true;
 
-    // 启动 Binder 线程
+    // Start Binder thread
     if (auto start = BinderWrapper::instance().ABinderProcess_startThreadPool) {
         start();
     } else {
@@ -225,7 +225,7 @@ void MurasakiBinderService::startThreadPool() {
         // Not fatal, but service might not work
     }
 
-    // 创建服务线程
+    // Create service thread
     serviceThread_ = std::thread([this]() {
         LOGI("Murasaki service thread started");
         if (auto join = BinderWrapper::instance().ABinderProcess_joinThreadPool) {
